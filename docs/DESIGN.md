@@ -453,6 +453,8 @@ src/
    stacking (click to raise).
 3. **Infinite canvas**: implement viewport panning — click-drag on empty canvas,
    scroll on empty canvas, and Super+right-drag anywhere.
+3b. **Cursor themes**: load xcursor theme, render compositor cursor, set shape
+   based on context (grab hand for move/pan, resize arrows for resize edges).
 4. **Canvas background**: shader and tiled image rendering with dot grid
    default. Essential spatial feedback for panning on an infinite canvas.
 5. **Trackpad gestures**: wire up libinput gesture events. 2-finger pan,
