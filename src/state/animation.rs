@@ -61,8 +61,12 @@ impl DriftWm {
     }
 
     /// Apply scroll momentum each frame. Skips frames where a scroll event
-    /// already moved the camera (via frame counter). Otherwise decays velocity.
+    /// already moved the camera (via frame counter). Suppressed during active
+    /// PanGrab to avoid interfering with grab tracking.
     pub fn apply_scroll_momentum(&mut self) {
+        if self.panning {
+            return;
+        }
         let Some(delta) = self.momentum.tick(self.frame_counter) else {
             return;
         };

@@ -114,7 +114,7 @@ fn momentum_tick_decays_by_friction() {
     let mut m = MomentumState::new(0.96);
     m.velocity = Point::from((10.0, 0.0));
     m.last_scroll_frame = 0;
-    let delta = m.tick(1).expect("expected Some delta");
+    let delta = m.tick(2).expect("expected Some delta");
     assert!((delta.x - 10.0).abs() < 1e-10, "tick returns pre-decay velocity");
     assert!((m.velocity.x - 10.0 * 0.96).abs() < 1e-10, "velocity decays by friction");
 }
@@ -125,7 +125,7 @@ fn momentum_tick_stops_below_threshold() {
     // speed = sqrt(0.1^2 + 0.1^2) ≈ 0.141, speed_sq = 0.02 < threshold_sq 0.25
     m.velocity = Point::from((0.1, 0.1));
     m.last_scroll_frame = 0;
-    let result = m.tick(1);
+    let result = m.tick(2);
     assert!(result.is_none(), "tick should return None below threshold");
     assert_eq!(m.velocity.x, 0.0);
     assert_eq!(m.velocity.y, 0.0);
@@ -149,12 +149,12 @@ fn momentum_tick_skips_same_frame_as_last_scroll() {
 }
 
 #[test]
-fn momentum_tick_returns_some_on_next_frame_after_scroll() {
+fn momentum_tick_returns_some_two_frames_after_scroll() {
     let mut m = MomentumState::new(0.96);
     m.accumulate(Point::from((5.0, 5.0)), 5);
-    m.tick(5); // skip frame 5
-    let result = m.tick(6);
-    assert!(result.is_some(), "tick on next frame should return Some");
+    assert!(m.tick(5).is_none(), "same frame as scroll");
+    assert!(m.tick(6).is_none(), "1-frame grace window (udev input/render split)");
+    assert!(m.tick(7).is_some(), "tick fires after grace window");
 }
 
 #[test]
@@ -162,10 +162,10 @@ fn momentum_friction_zero_stops_after_first_tick() {
     let mut m = MomentumState::new(0.0);
     m.velocity = Point::from((10.0, 0.0));
     m.last_scroll_frame = 0;
-    let first = m.tick(1);
+    let first = m.tick(2);
     assert!(first.is_some(), "first tick should return the velocity");
     // After friction=0.0 is applied, velocity becomes 0.0 * 0.0 = 0.0
-    let second = m.tick(2);
+    let second = m.tick(3);
     assert!(second.is_none(), "second tick with friction=0 should return None");
 }
 
@@ -174,7 +174,7 @@ fn momentum_friction_one_never_stops() {
     let mut m = MomentumState::new(1.0);
     m.velocity = Point::from((1.0, 0.0));
     m.last_scroll_frame = 0;
-    for frame in 1..=50 {
+    for frame in 2..=50 {
         let result = m.tick(frame);
         assert!(result.is_some(), "friction=1.0 should never stop, failed at frame {frame}");
         // velocity must stay at exactly 1.0
@@ -189,7 +189,7 @@ fn momentum_friction_096_decays_monotonically_and_stops() {
     m.last_scroll_frame = 0;
     let mut prev_speed_sq = m.velocity.x.powi(2) + m.velocity.y.powi(2);
     let mut ticked = false;
-    for frame in 1..=200 {
+    for frame in 2..=200 {
         match m.tick(frame) {
             Some(_) => {
                 ticked = true;

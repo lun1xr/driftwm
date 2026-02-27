@@ -84,6 +84,8 @@ impl PointerGrab<DriftWm> for PanGrab {
                 let keyboard = data.seat.get_keyboard().unwrap();
                 keyboard.set_focus(data, None::<FocusTarget>, serial);
             }
+            // Release panning lock so momentum can coast freely
+            data.panning = false;
             // Momentum is already primed from accumulated deltas — friction handles the coast
             handle.unset_grab(self, data, event.serial, event.time, true);
         }

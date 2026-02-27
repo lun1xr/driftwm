@@ -113,6 +113,9 @@ pub struct DriftWm {
     pub momentum: MomentumState,
     /// Monotonic frame counter, incremented each render tick.
     pub frame_counter: u64,
+    /// True while a PanGrab is active. Suppresses momentum ticks so
+    /// they don't interfere with the grab's camera tracking.
+    pub panning: bool,
 
     /// Auto-pan velocity when dragging a window to viewport edge.
     /// Set by MoveSurfaceGrab, cleared when grab ends or cursor leaves edge zone.
@@ -264,6 +267,7 @@ impl DriftWm {
             last_scroll_pan: None,
             momentum: MomentumState::new(config.friction),
             frame_counter: 0,
+            panning: false,
             edge_pan_velocity: None,
             cursor_status: CursorImageStatus::default_named(),
             grab_cursor: false,

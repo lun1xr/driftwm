@@ -74,10 +74,10 @@ impl DriftWm {
                     let raw = sym.raw();
                     if (0x1008FE01..=0x1008FE0C).contains(&raw) {
                         let vt = (raw - 0x1008FE01 + 1) as i32;
-                        if let Some(ref mut session) = state.session {
-                            if let Err(e) = session.change_vt(vt) {
-                                tracing::warn!("Failed to switch to VT{vt}: {e}");
-                            }
+                        if let Some(ref mut session) = state.session
+                            && let Err(e) = session.change_vt(vt)
+                        {
+                            tracing::warn!("Failed to switch to VT{vt}: {e}");
                         }
                         return FilterResult::Intercept(None);
                     }

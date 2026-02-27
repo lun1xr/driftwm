@@ -233,8 +233,10 @@ impl MomentumState {
 
     /// Returns Some(delta) to apply, or None if skipped/finished.
     pub fn tick(&mut self, current_frame: u64) -> Option<Point<f64, Logical>> {
-        // Skip on frames where a scroll event already moved the camera
-        if self.last_scroll_frame == current_frame {
+        // Skip when a scroll/drag event recently moved the camera.
+        // 1-frame grace window: on udev, input fires between renders with the
+        // old frame_counter, so an exact match misses by one frame.
+        if current_frame.saturating_sub(self.last_scroll_frame) <= 1 {
             return None;
         }
         if self.velocity.x.powi(2) + self.velocity.y.powi(2) < self.threshold_sq {

@@ -106,6 +106,7 @@ impl DriftWm {
                         // No window under cursor — fall through
                     }
                     MouseAction::PanViewport => {
+                        self.panning = true;
                         let grab = self.make_pan_grab(pos, button, false);
                         pointer.set_grab(self, grab, serial, Focus::Clear);
                         return;
@@ -130,6 +131,7 @@ impl DriftWm {
                 );
             } else if button == config::BTN_LEFT {
                 // Left-click on empty canvas → pan
+                self.panning = true;
                 let grab = self.make_pan_grab(pos, button, true);
                 pointer.set_grab(self, grab, serial, Focus::Clear);
                 return;
