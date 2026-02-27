@@ -1,3 +1,7 @@
+mod animation;
+mod fullscreen;
+mod navigation;
+
 use smithay::{
     desktop::{PopupManager, Space, Window},
     input::{Seat, SeatState, keyboard::XkbConfig, pointer::CursorImageStatus},
@@ -10,7 +14,7 @@ use smithay::{
             protocol::wl_surface::WlSurface,
         },
     },
-    utils::{Logical, Point},
+    utils::{Logical, Point, Size},
     wayland::output::OutputManagerState,
     wayland::{
         compositor::{CompositorClientState, CompositorState},
@@ -21,7 +25,7 @@ use smithay::{
     },
 };
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use smithay::backend::allocator::Fourcc;
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
@@ -39,11 +43,10 @@ use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
 use smithay::backend::renderer::gles::{GlesPixelProgram, GlesRenderer, element::PixelShaderElement};
 use smithay::backend::winit::WinitGraphicsBackend;
-use smithay::utils::{Size, Transform};
+use smithay::utils::Transform;
 
-use driftwm::canvas::{self, CanvasPos, MomentumState};
+use driftwm::canvas::MomentumState;
 use driftwm::config::Config;
-use smithay::wayland::shell::wlr_layer::Layer as WlrLayer;
 
 pub use crate::focus::FocusTarget;
 
@@ -224,7 +227,7 @@ impl DriftWm {
         let foreign_toplevel_state =
             driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState::new::<Self, _>(&dh, |_| true);
 
-        let config = Config::default();
+        let config = Config::load();
 
         let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "seat-0");
         seat.add_keyboard(XkbConfig::default(), config.repeat_delay, config.repeat_rate)
@@ -289,99 +292,6 @@ impl DriftWm {
         }
     }
 
-    /// Fire held compositor action if repeat delay/rate has elapsed.
-    pub fn apply_key_repeat(&mut self) {
-        let Some((_, ref action, next_fire)) = self.held_action else {
-            return;
-        };
-        let now = Instant::now();
-        if now < next_fire {
-            return;
-        }
-        let action = action.clone();
-        let rate_interval = Duration::from_millis(1000 / self.config.repeat_rate.max(1) as u64);
-        self.held_action.as_mut().unwrap().2 = now + rate_interval;
-        self.execute_action(&action);
-    }
-
-    /// Compute focus target at the given canvas position, respecting whether
-    /// the pointer is currently over a layer surface or a canvas window.
-    fn focus_under(
-        &self,
-        canvas_pos: Point<f64, Logical>,
-    ) -> Option<(FocusTarget, Point<f64, Logical>)> {
-        if self.pointer_over_layer {
-            let screen_pos =
-                canvas::canvas_to_screen(CanvasPos(canvas_pos), self.camera, self.zoom).0;
-            self.layer_surface_under(
-                screen_pos,
-                canvas_pos,
-                &[WlrLayer::Overlay, WlrLayer::Top, WlrLayer::Bottom, WlrLayer::Background],
-            )
-        } else {
-            self.surface_under(canvas_pos)
-        }
-    }
-
-    /// Send a synthetic pointer motion to keep the cursor at the same screen
-    /// position after a camera or zoom change.
-    fn warp_pointer(&mut self, new_pos: Point<f64, Logical>) {
-        let under = self.focus_under(new_pos);
-        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
-        let pointer = self.seat.get_pointer().unwrap();
-        pointer.motion(
-            self,
-            under,
-            &smithay::input::pointer::MotionEvent {
-                location: new_pos,
-                serial,
-                time: self.start_time.elapsed().as_millis() as u32,
-            },
-        );
-        pointer.frame(self);
-    }
-
-    /// Apply scroll momentum each frame. Skips frames where a scroll event
-    /// already moved the camera (via frame counter). Otherwise decays velocity.
-    pub fn apply_scroll_momentum(&mut self) {
-        let Some(delta) = self.momentum.tick(self.frame_counter) else {
-            return;
-        };
-
-        self.camera += delta;
-        self.update_output_from_camera();
-
-        // Shift pointer canvas position so screen position stays fixed
-        let pos = self.seat.get_pointer().unwrap().current_location();
-        self.warp_pointer(pos + delta);
-    }
-
-    /// Apply edge auto-pan each frame during a window drag near viewport edges.
-    /// Synthetic pointer motion keeps cursor at the same screen position and
-    /// lets the active MoveSurfaceGrab reposition the window automatically.
-    pub fn apply_edge_pan(&mut self) {
-        let Some(velocity) = self.edge_pan_velocity else { return; };
-        // velocity is screen-space speed; convert to canvas delta
-        let canvas_delta = Point::from((velocity.x / self.zoom, velocity.y / self.zoom));
-        self.camera += canvas_delta;
-        self.update_output_from_camera();
-
-        // Shift pointer canvas position so screen position stays fixed
-        let pos = self.seat.get_pointer().unwrap().current_location();
-        self.warp_pointer(pos + canvas_delta);
-    }
-
-    /// Apply a viewport pan delta with momentum accumulation.
-    /// Call this from any input path that should drift (scroll, click-drag, future gestures).
-    pub fn drift_pan(&mut self, delta: Point<f64, Logical>) {
-        self.camera_target = None; // Cancel animation on manual input
-        self.zoom_target = None;
-        self.overview_return = None;
-        self.momentum.accumulate(delta, self.frame_counter);
-        self.camera += delta;
-        self.update_output_from_camera();
-    }
-
     /// Sync each output's position to the current camera, so render_output
     /// automatically applies the canvas→screen transform.
     pub fn update_output_from_camera(&mut self) {
@@ -389,85 +299,6 @@ impl DriftWm {
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
             self.space.map_output(&output, camera_i32);
         }
-    }
-
-    /// Advance the camera animation toward `camera_target` using frame-rate independent lerp.
-    /// Shifts the pointer by the camera delta so the cursor stays at the same screen position.
-    pub fn apply_camera_animation(&mut self, dt: Duration) {
-        let Some(target) = self.camera_target else {
-            return;
-        };
-
-        let old_camera = self.camera;
-
-        let base = self.config.animation_speed;
-        let reference_dt = 1.0 / 60.0;
-        let dt_secs = dt.as_secs_f64();
-        let factor = 1.0 - (1.0 - base).powf(dt_secs / reference_dt);
-
-        let dx = target.x - self.camera.x;
-        let dy = target.y - self.camera.y;
-
-        // Snap when sub-pixel close
-        if dx * dx + dy * dy < 0.25 {
-            self.camera = target;
-            self.camera_target = None;
-        } else {
-            self.camera = Point::from((
-                self.camera.x + dx * factor,
-                self.camera.y + dy * factor,
-            ));
-        }
-
-        self.update_output_from_camera();
-
-        // Shift pointer so cursor stays at the same screen position
-        let delta = self.camera - old_camera;
-        let pos = self.seat.get_pointer().unwrap().current_location();
-        self.warp_pointer(pos + delta);
-    }
-
-    /// Navigate the viewport to center on a window: raise, focus, animate camera.
-    /// If returning from overview (ZoomToFit), also restores the saved zoom level.
-    pub fn navigate_to_window(&mut self, window: &Window) {
-        self.space.raise_element(window, true);
-        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
-        let keyboard = self.seat.get_keyboard().unwrap();
-        let surface = window.toplevel().unwrap().wl_surface().clone();
-        keyboard.set_focus(self, Some(FocusTarget(surface)), serial);
-
-        // If in overview, restore saved zoom; otherwise keep current zoom
-        let target_zoom = if let Some((_, saved_zoom)) = self.overview_return.take() {
-            saved_zoom
-        } else {
-            self.zoom
-        };
-
-        let window_loc = self.space.element_location(window).unwrap_or_default();
-        let window_size = window.geometry().size;
-        let viewport_size = self.get_viewport_size();
-        let target = driftwm::canvas::camera_to_center_window(
-            window_loc, window_size, viewport_size, target_zoom,
-        );
-
-        self.momentum.stop();
-        self.camera_target = Some(target);
-        self.zoom_target = Some(target_zoom);
-    }
-
-    /// Dynamic minimum zoom based on the current window layout.
-    /// Allows zooming out far enough to see all windows.
-    pub fn min_zoom(&self) -> f64 {
-        let viewport = self.get_viewport_size();
-        driftwm::canvas::dynamic_min_zoom(
-            self.space.elements().map(|w| {
-                let loc = self.space.element_location(w).unwrap_or_default();
-                let size = w.geometry().size;
-                (loc, size)
-            }),
-            viewport,
-            self.config.zoom_fit_padding,
-        )
     }
 
     /// Logical viewport size from the first output.
@@ -478,67 +309,6 @@ impl DriftWm {
             .and_then(|o| o.current_mode())
             .map(|m| m.size.to_logical(1))
             .unwrap_or((1, 1).into())
-    }
-
-    /// Advance zoom animation toward `zoom_target` using frame-rate independent lerp.
-    /// Adjusts pointer canvas position so the cursor stays at the same screen position.
-    pub fn apply_zoom_animation(&mut self, dt: Duration) {
-        let Some(target) = self.zoom_target else {
-            return;
-        };
-
-        let old_zoom = self.zoom;
-
-        let base = self.config.animation_speed;
-        let reference_dt = 1.0 / 60.0;
-        let dt_secs = dt.as_secs_f64();
-        let factor = 1.0 - (1.0 - base).powf(dt_secs / reference_dt);
-
-        let dz = target - self.zoom;
-        if dz.abs() < 0.001 {
-            self.zoom = target;
-            self.zoom_target = None;
-        } else {
-            self.zoom += dz * factor;
-        }
-
-        // Adjust pointer so cursor stays at the same screen position.
-        // screen = (canvas - camera) * zoom  ⟹  new_canvas = screen / new_zoom + camera
-        if self.zoom != old_zoom {
-            let pos = self.seat.get_pointer().unwrap().current_location();
-            let screen_x = (pos.x - self.camera.x) * old_zoom;
-            let screen_y = (pos.y - self.camera.y) * old_zoom;
-            let new_pos = Point::from((
-                screen_x / self.zoom + self.camera.x,
-                screen_y / self.zoom + self.camera.y,
-            ));
-            self.warp_pointer(new_pos);
-        }
-    }
-
-    /// Update focus history with the given surface (push to front / move to front).
-    /// Should NOT be called during Alt-Tab cycling (history is frozen).
-    pub fn update_focus_history(&mut self, surface: &WlSurface) {
-        let window = self
-            .space
-            .elements()
-            .find(|w| w.toplevel().unwrap().wl_surface() == surface)
-            .cloned();
-        if let Some(window) = window {
-            self.focus_history.retain(|w| w != &window);
-            self.focus_history.insert(0, window);
-        }
-    }
-
-    /// End Alt-Tab cycling: commit the selected window to focus history.
-    pub fn end_cycle(&mut self) {
-        let idx = self.cycle_state.take();
-        if let Some(idx) = idx
-            && let Some(window) = self.focus_history.get(idx).cloned()
-        {
-            self.focus_history.retain(|w| w != &window);
-            self.focus_history.insert(0, window);
-        }
     }
 
     /// Load an xcursor image by name and cache the resulting MemoryRenderBuffer.
@@ -576,96 +346,5 @@ impl DriftWm {
                 .insert(name.to_string(), (buffer, hotspot));
         }
         self.cursor_buffers.get(name)
-    }
-
-    /// Enter fullscreen for the given window: lock viewport, expand window to fill screen.
-    pub fn enter_fullscreen(&mut self, window: &Window) {
-        // If already fullscreen (same or different window), exit first
-        if self.fullscreen.is_some() {
-            self.exit_fullscreen();
-        }
-
-        let viewport_size = self.get_viewport_size();
-        let saved_location = self.space.element_location(window).unwrap_or_default();
-
-        self.fullscreen = Some(FullscreenState {
-            window: window.clone(),
-            saved_location,
-            saved_camera: self.camera,
-            saved_zoom: self.zoom,
-        });
-
-        // Tell the client to go fullscreen at output size
-        window.toplevel().unwrap().with_pending_state(|state| {
-            state.states.set(xdg_toplevel::State::Fullscreen);
-            state.size = Some(viewport_size);
-        });
-        window.toplevel().unwrap().send_configure();
-
-        // Lock viewport: stop all animations and momentum
-        self.zoom = 1.0;
-        self.zoom_target = None;
-        self.camera_target = None;
-        self.momentum.stop();
-        self.overview_return = None;
-        self.home_return = None;
-        // Top/Bottom layers are hidden during fullscreen — reset stale pointer state
-        self.pointer_over_layer = false;
-
-        // Snap camera to integer for pixel-perfect alignment
-        let camera_i32 = self.camera.to_i32_round();
-        self.camera = Point::from((camera_i32.x as f64, camera_i32.y as f64));
-
-        // Place window at viewport origin and raise
-        self.space.map_element(window.clone(), camera_i32, true);
-        self.space.raise_element(window, true);
-        self.update_output_from_camera();
-
-        // Ensure keyboard focus is on the fullscreen window
-        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
-        let keyboard = self.seat.get_keyboard().unwrap();
-        let surface = window.toplevel().unwrap().wl_surface().clone();
-        keyboard.set_focus(self, Some(FocusTarget(surface)), serial);
-    }
-
-    /// Exit fullscreen: restore window position, camera, and zoom.
-    pub fn exit_fullscreen(&mut self) {
-        let Some(fs) = self.fullscreen.take() else {
-            return;
-        };
-
-        // Tell client to leave fullscreen
-        fs.window.toplevel().unwrap().with_pending_state(|state| {
-            state.states.unset(xdg_toplevel::State::Fullscreen);
-            state.size = None;
-        });
-        fs.window.toplevel().unwrap().send_configure();
-
-        // Restore window position, camera, zoom
-        self.space.map_element(fs.window, fs.saved_location, false);
-        self.camera = fs.saved_camera;
-        self.zoom = fs.saved_zoom;
-        self.update_output_from_camera();
-    }
-
-    /// Exit fullscreen and remap the pointer to maintain its screen position
-    /// under the restored camera/zoom. Returns the new canvas position.
-    pub fn exit_fullscreen_remap_pointer(
-        &mut self,
-        canvas_pos: Point<f64, Logical>,
-    ) -> Point<f64, Logical> {
-        let old_camera = self.camera;
-        let old_zoom = self.zoom;
-        self.exit_fullscreen();
-        let screen: Point<f64, Logical> = Point::from((
-            (canvas_pos.x - old_camera.x) * old_zoom,
-            (canvas_pos.y - old_camera.y) * old_zoom,
-        ));
-        let new_pos = Point::from((
-            screen.x / self.zoom + self.camera.x,
-            screen.y / self.zoom + self.camera.y,
-        ));
-        self.warp_pointer(new_pos);
-        new_pos
     }
 }
