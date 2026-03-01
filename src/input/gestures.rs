@@ -58,6 +58,8 @@ pub enum GestureState {
     Pinch3Zoom { initial_zoom: f64 },
     /// 4-finger pinch → pinch-in: HomeToggle, pinch-out: ZoomToFit
     Pinch4Nav { fired: bool },
+    /// 4-finger hold (tap with no movement) → CenterWindow on release
+    Hold4,
 }
 
 const SWIPE4_THRESHOLD_SQ: f64 = 16.0 * 16.0;
@@ -287,6 +289,9 @@ impl DriftWm {
                 self.grab_cursor = false;
                 self.cursor_status = CursorImageStatus::default_named();
             }
+            GestureState::Swipe4Navigate { fired: false, .. } if !cancelled => {
+                self.execute_action(&Action::CenterWindow);
+            }
             _ => {}
         }
     }
@@ -429,6 +434,9 @@ impl DriftWm {
             GestureState::Pinch2Forward => {
                 self.forward_pinch_end(cancelled, time);
             }
+            GestureState::Pinch4Nav { fired: false } if !cancelled => {
+                self.execute_action(&Action::CenterWindow);
+            }
             _ => {}
         }
     }
@@ -438,12 +446,22 @@ impl DriftWm {
     pub fn on_gesture_hold_begin<I: InputBackend>(&mut self, event: I::GestureHoldBeginEvent) {
         let fingers = event.fingers();
         let time = Event::time_msec(&event);
+        if fingers == 4 {
+            self.gesture_state = Some(GestureState::Hold4);
+            return;
+        }
         self.forward_hold_begin(fingers, time);
     }
 
     pub fn on_gesture_hold_end<I: InputBackend>(&mut self, event: I::GestureHoldEndEvent) {
         let cancelled = event.cancelled();
         let time = Event::time_msec(&event);
+        if let Some(GestureState::Hold4) = self.gesture_state.take() {
+            if !cancelled {
+                self.execute_action(&Action::CenterWindow);
+            }
+            return;
+        }
         self.forward_hold_end(cancelled, time);
     }
 

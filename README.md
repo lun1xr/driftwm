@@ -24,6 +24,7 @@ coordinates on this plane. You move around with trackpad gestures:
 - **4-finger swipe** — jump to the nearest window in that direction
 - **4-finger pinch in** — toggle overview (zoom-to-fit)
 - **4-finger pinch out** — toggle home position
+- **4-finger hold (tap)** — center focused window
 
 Mouse: scroll wheel zooms, click-drag pans. `Mod` + click/drag works anywhere.
 `Mod+Ctrl` + drag navigates to nearest window. `Mod` + trackpad scroll pans anywhere.

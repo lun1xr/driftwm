@@ -160,8 +160,8 @@
 # Mouse actions: move-window, resize-window, pan-viewport, zoom, navigate, none
 
 [mouse]
-# "mod+shift+left" = "move-window"
-# "mod+shift+right" = "resize-window"
+# "alt+left" = "move-window"
+# "alt+right" = "resize-window"
 # "mod+left" = "pan-viewport"
 # "mod+ctrl+left" = "navigate"
 # "mod+scroll" = "zoom"

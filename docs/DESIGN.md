@@ -106,6 +106,7 @@ if the surface under the cursor changes mid-gesture).
 | 4       | scroll       | anywhere  | Center nearest window in direction |
 | 4       | pinch in     | anywhere  | Zoom-to-fit (overview)             |
 | 4       | pinch out    | anywhere  | Toggle home (0,0) ↔ previous       |
+| 4       | hold (tap)   | anywhere  | Center focused window              |
 
 **3-finger double-tap-drag**: Tap with three fingers on a window (libinput
 generates BTN_MIDDLE via tap-to-click), then immediately start a 3-finger
@@ -126,6 +127,11 @@ raises, and warps cursor to its center. Repeat to hop window-to-window.
 Pinch-out triggers home toggle (snap to origin or return to previous position).
 Thresholds: scale < 0.8 for pinch-in, scale > 1.2 for pinch-out.
 
+**4-finger hold (tap)**: Place four fingers on the trackpad and lift without
+swiping or pinching. Centers the currently focused window in the viewport.
+Requires a brief hold (~150ms) because libinput's gesture recognizer needs time
+to classify the touch — tap-to-click only handles up to 3 fingers.
+
 ### Mouse equivalents
 
 | Action           | Mouse input                          |
@@ -134,8 +140,8 @@ Thresholds: scale < 0.8 for pinch-in, scale > 1.2 for pinch-out.
 | Pan viewport     | `Super` + left-drag (anywhere)       |
 | Zoom             | Scroll wheel on empty canvas         |
 | Zoom             | `Super` + scroll wheel (anywhere)    |
-| Move window      | `Super+Shift` + left-drag            |
-| Resize window    | `Super+Shift` + right-drag           |
+| Move window      | `Alt` + left-drag                    |
+| Resize window    | `Alt` + right-drag                   |
 | Navigate nearest | `Super+Ctrl` + left-drag (natural)   |
 
 **Trackpad vs mouse wheel**: both produce axis events but serve different

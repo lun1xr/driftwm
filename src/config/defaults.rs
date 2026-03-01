@@ -239,9 +239,9 @@ pub(super) fn default_bindings(mod_key: ModKey, cycle_mod: CycleModifier) -> Has
 
 pub(super) fn default_mouse_bindings(mod_key: ModKey) -> HashMap<MouseBinding, MouseAction> {
     let m = mod_key.base();
-    let m_shift = Modifiers {
-        shift: true,
-        ..m.clone()
+    let alt_only = Modifiers {
+        alt: true,
+        ..Modifiers::EMPTY
     };
 
     let m_ctrl = Modifiers {
@@ -252,14 +252,14 @@ pub(super) fn default_mouse_bindings(mod_key: ModKey) -> HashMap<MouseBinding, M
     HashMap::from([
         (
             MouseBinding {
-                modifiers: m_shift.clone(),
+                modifiers: alt_only.clone(),
                 trigger: MouseTrigger::Button(BTN_LEFT),
             },
             MouseAction::MoveWindow,
         ),
         (
             MouseBinding {
-                modifiers: m_shift,
+                modifiers: alt_only,
                 trigger: MouseTrigger::Button(BTN_RIGHT),
             },
             MouseAction::ResizeWindow,
