@@ -21,10 +21,6 @@ fn logo() -> ModifiersState {
     mods(false, false, false, true)
 }
 
-fn logo_shift() -> ModifiersState {
-    mods(false, false, true, true)
-}
-
 // ── parse_key_combo ───────────────────────────────────────────────────────
 
 #[test]
@@ -219,24 +215,26 @@ fn parse_direction_unknown_is_error() {
 // ── Default mouse bindings ────────────────────────────────────────────────
 
 #[test]
-fn default_mouse_bindings_move_window_on_super_shift_left() {
+fn default_mouse_bindings_move_window_on_alt_left() {
     let config = Config::default();
-    let result = config.mouse_button_lookup(&logo_shift(), BTN_LEFT);
-    assert!(result.is_some(), "Super+Shift+Left should be bound");
+    let alt = mods(true, false, false, false);
+    let result = config.mouse_button_lookup(&alt, BTN_LEFT);
+    assert!(result.is_some(), "Alt+Left should be bound");
     assert!(
         matches!(result.unwrap(), MouseAction::MoveWindow),
-        "Super+Shift+Left should resolve to MoveWindow"
+        "Alt+Left should resolve to MoveWindow"
     );
 }
 
 #[test]
-fn default_mouse_bindings_resize_window_on_super_shift_right() {
+fn default_mouse_bindings_resize_window_on_alt_right() {
     let config = Config::default();
-    let result = config.mouse_button_lookup(&logo_shift(), BTN_RIGHT);
-    assert!(result.is_some(), "Super+Shift+Right should be bound");
+    let alt = mods(true, false, false, false);
+    let result = config.mouse_button_lookup(&alt, BTN_RIGHT);
+    assert!(result.is_some(), "Alt+Right should be bound");
     assert!(
         matches!(result.unwrap(), MouseAction::ResizeWindow),
-        "Super+Shift+Right should resolve to ResizeWindow"
+        "Alt+Right should resolve to ResizeWindow"
     );
 }
 

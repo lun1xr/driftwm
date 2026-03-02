@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::grabs::{MoveSurfaceGrab, ResizeState, ResizeSurfaceGrab};
+use crate::grabs::{MoveSurfaceGrab, ResizeState, ResizeSurfaceGrab, SnapState};
 use crate::state::{DriftWm, FocusTarget};
 use smithay::{
     delegate_xdg_shell,
@@ -212,6 +212,7 @@ impl XdgShellHandler for DriftWm {
             start_data,
             window,
             initial_window_location,
+            snap: SnapState::default(),
         };
         pointer.set_grab(self, grab, serial, Focus::Clear);
     }

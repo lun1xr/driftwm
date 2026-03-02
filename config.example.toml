@@ -61,6 +61,12 @@
 # step = 1.1                  # multiplier per keypress (1.1 = 10% per press)
 # fit_padding = 100.0         # canvas px padding for zoom-to-fit
 
+[snap]
+# enabled = true               # magnetic edge snapping during window drag
+# gap = 12.0                   # gap between snapped windows (canvas px)
+# distance = 24.0              # activation threshold (screen px from edge)
+# break_force = 32.0           # screen px past snap to break free
+
 [output]
 # scale = 1.0                 # display scale factor (1.0, 1.5, 2.0)
 

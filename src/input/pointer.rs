@@ -18,7 +18,7 @@ use smithay::{
 
 use driftwm::canvas::{self, CanvasPos, canvas_to_screen};
 use driftwm::config::{self, MouseAction};
-use crate::grabs::{MoveSurfaceGrab, NavigateGrab, PanGrab, ResizeState, ResizeSurfaceGrab};
+use crate::grabs::{MoveSurfaceGrab, NavigateGrab, PanGrab, ResizeState, ResizeSurfaceGrab, SnapState};
 use crate::state::{DriftWm, FocusTarget, PendingMiddleClick};
 
 impl DriftWm {
@@ -128,6 +128,7 @@ impl DriftWm {
                                     start_data,
                                     window,
                                     initial_window_location,
+                                    snap: SnapState::default(),
                                 };
                                 pointer.set_grab(self, grab, serial, Focus::Clear);
                                 return;

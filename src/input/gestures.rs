@@ -19,7 +19,7 @@ use smithay::{
     wayland::compositor::with_states,
 };
 
-use crate::grabs::{MoveSurfaceGrab, ResizeState, has_bottom, has_left, has_right, has_top};
+use crate::grabs::{MoveSurfaceGrab, ResizeState, SnapState, has_bottom, has_left, has_right, has_top};
 use crate::state::{DriftWm, FocusTarget};
 use driftwm::canvas::{self, CanvasPos, canvas_to_screen};
 use driftwm::config::{Action, Direction};
@@ -535,6 +535,7 @@ impl DriftWm {
             },
             window,
             initial_window_location,
+            snap: SnapState::default(),
         };
         pointer.set_grab(self, grab, serial, Focus::Clear);
 

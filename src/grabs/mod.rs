@@ -117,7 +117,7 @@ mod navigate_grab;
 mod pan_grab;
 mod resize_grab;
 
-pub use move_grab::MoveSurfaceGrab;
+pub use move_grab::{MoveSurfaceGrab, SnapState};
 pub use navigate_grab::NavigateGrab;
 pub use pan_grab::PanGrab;
 pub use resize_grab::{ResizeState, ResizeSurfaceGrab, has_bottom, has_left, has_right, has_top};

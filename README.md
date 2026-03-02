@@ -26,10 +26,9 @@ coordinates on this plane. You move around with trackpad gestures:
 - **4-finger pinch out** — toggle home position
 - **4-finger hold (tap)** — center focused window + reset zoom
 
-**Small trackpad alternative**: hold `Mod` to use fewer fingers — `Mod`+3-finger replaces 4-finger gestures. Resize uses `Alt`+3-finger.
+**Small trackpad alternative**: hold `Mod` to use fewer fingers — `Mod`+2/3-finger replaces 3/4-finger gestures. Resize uses `Alt`+3-finger.
 
-Mouse: scroll wheel zooms, click-drag pans. `Mod` + click/drag works anywhere.
-`Mod+Ctrl` + drag navigates to nearest window. `Mod` + trackpad scroll pans anywhere.
+Mouse: scroll wheel zooms, click-drag pans. `Mod` + drag/zoom works anywhere. `Mod+Ctrl` + drag navigates to nearest window.
 
 A static wallpaper gives no feedback when panning an infinite canvas, so
 the background scrolls with the viewport. Any GLSL fragment shader works as
@@ -124,7 +123,7 @@ only specify what you want to change. Use `"none"` to unbind a default binding.
 8. **Config file** — TOML parsing, user keybindings/mouse bindings/settings _(done)_
 9. **udev backend** — DRM/KMS, libinput, libseat session management _(done)_
 10. **Trackpad gestures** — gesture state machine, libinput device config _(done)_
-11. **Window rules** — app_id matching, widget mode, state file, xdg-decoration _(done)_
+11. **Window rules** — app*id matching, widget mode, state file, xdg-decoration *(done)\_
 12. Decorations — SSD fallback, resize grab zones
 13. XWayland — X11 app support
 14. Screenshot/screencast — wlr-screencopy, screen capture
