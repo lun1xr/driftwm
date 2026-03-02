@@ -295,6 +295,7 @@ pub fn init_udev(
     {
         let mut backend = data.state.backend.take().unwrap();
         crate::render::init_background(&mut data.state, backend.renderer(), initial_size);
+        data.state.shadow_shader = crate::render::compile_shadow_shader(backend.renderer());
         data.state.backend = Some(backend);
     }
 

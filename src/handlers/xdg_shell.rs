@@ -142,6 +142,8 @@ impl XdgShellHandler for DriftWm {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let wl_surface = surface.wl_surface().clone();
+        self.decorations.remove(&wl_surface.id());
+        self.pending_ssd.remove(&wl_surface.id());
         self.pending_center.remove(&wl_surface);
         // Collect first to avoid holding an immutable borrow on space
         let window = self
@@ -154,7 +156,7 @@ impl XdgShellHandler for DriftWm {
             let keyboard = self.seat.get_keyboard().unwrap();
             if keyboard
                 .current_focus()
-                .is_some_and(|f| &f.0 == &wl_surface)
+                .is_some_and(|f| f.0 == wl_surface)
             {
                 keyboard.set_focus(
                     self,

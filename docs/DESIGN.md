@@ -33,11 +33,14 @@ trackpad gestures. No workspaces, no tiling — just drift.
   - `keyboard-shortcuts-inhibit` — let apps grab shortcuts
   - `idle-inhibit` — prevent screen dimming
   - `wp_presentation_time` — frame timing feedback
+  - `wlr-screencopy` — screenshot/screencast support (grim, OBS)
+  - `xdg-decoration` — negotiate SSD vs CSD (CSD-first strategy)
+  - `ext-session-lock` — screen locking (swaylock)
+  - `wlr-layer-shell` — status bars, launchers, overlays (waybar, fuzzel)
+  - `zwlr-foreign-toplevel-management` — taskbar window switching
 
   Not yet implemented:
-  - `wlr-screencopy` — screenshot support (grim)
   - `ext-image-capture-source` + `ext-image-copy-capture` — newer screenshot/screencast capture (replaces wlr-screencopy, used by xdg-desktop-portal-wlr for OBS/Firefox screen share)
-  - `xdg-decoration` — negotiate SSD vs CSD (milestone 12)
   - XWayland — run X11 apps (milestone 13)
 
 ## Core concept: infinite canvas
@@ -164,6 +167,12 @@ direction. Speed is depth-proportional — deeper into the zone means faster
 panning (quadratic ramp, like a joystick). All 8 directions (corners =
 diagonal blend). Stops when cursor leaves the zone or the drag ends.
 
+### Window snapping
+
+When dragging a window near another window's edge, the dragged window snaps to
+align edges magnetically. Configurable via `[snap]` in the config file (enable/
+disable, threshold distance).
+
 ## Keyboard shortcuts
 
 Minimal set. Defaults below, all configurable via `[keybinds]` table (maps key combo → built-in action or `exec` command). Implementation: data-driven binding lookup from day one, initially populated from defaults, later merged with user config.
@@ -225,21 +234,29 @@ Minimal set. Defaults below, all configurable via `[keybinds]` table (maps key c
 
 ## Window decorations
 
-**Strategy**: CSD-first. Compositor advertises only `close` and `fullscreen`
-capabilities via `xdg-toplevel` — no maximize, no minimize. GTK/Qt apps will
-hide those buttons automatically.
+**Strategy**: CSD-first via `xdg-decoration` protocol. Compositor advertises
+only `close` and `fullscreen` capabilities via `xdg-toplevel` — no maximize,
+no minimize. GTK/Qt apps hide those buttons automatically.
 
 - **CSD apps** (GTK4, GTK3, most GNOME apps): draw their own title bar with
   close button only. Compositor does nothing.
+- **Borderless windows**: window rules can set `decoration = "none"` — client
+  removes its CSD via `xdg-decoration`, compositor draws nothing. Used for
+  widgets and special windows.
 - **SSD fallback** (XWayland apps, some Qt apps that render with zero
-  decorations): compositor draws a minimal title bar + close button. Not needed
-  for v1 but eventually required for compatibility.
-- **Resize grabs**: invisible border zone (~5px) around every window for resize.
-  Cursor changes on hover. Always provided by compositor.
-- **Shadows**: compositor renders drop shadows behind each window (blurred
-  rect or 9-slice texture). Nice-to-have, not essential for v1.
-
-Negotiate via `xdg-decoration` protocol. Default to CSD, fall back to SSD.
+  decorations): compositor draws a minimal title bar + close button.
+  - 25px title bar with rounded top corners (radius 8)
+  - Thin × close button, right-aligned with 8px padding
+  - Gaussian drop shadow (radius 14, GLSL shader)
+  - Invisible resize borders (8px) around SSD windows for edge/corner resize
+- **Interaction**: click title bar to drag, click × to close, drag borders to
+  resize, hover × changes cursor to pointer.
+- **Window rules**: `decoration` field controls mode — `"client"` (default,
+  CSD), `"server"` (force SSD), `"none"` (borderless).
+- **Configuration**: only `bg_color` and `fg_color` are configurable in
+  `[decorations]` — everything else (dimensions, corner radius, shadow) is
+  hardcoded.
+- **Snapping**: window snapping accounts for SSD title bar boundaries.
 
 ## Focus model
 
@@ -396,7 +413,7 @@ All external — compositor delegates to standard Wayland tools.
 | `swayosd`      | Volume/brightness OSD                |
 | `fuzzel`       | App launcher                         |
 | `crystal-dock` | Dock / taskbar                       |
-| `swaylock`     | Lock screen                          |
+| `swaylock`     | Lock screen (`ext-session-lock`)     |
 
 Waybar modules: canvas x,y,z from driftwm, clock/date, keyboard layout,
 swaync integration, logout menu.
@@ -454,24 +471,47 @@ debugging gesture recognition and input handling.
 
 ```
 src/
-├── main.rs              # entry point, backend selection
-├── state.rs             # compositor state (canvas, viewports, window list)
-├── canvas.rs            # viewport math, coordinate transforms, zoom
+├── main.rs
+├── lib.rs
+├── canvas.rs
+├── focus.rs
+├── decorations.rs
+├── render.rs
+├── backend/
+│   ├── mod.rs
+│   ├── winit.rs
+│   └── udev.rs
+├── state/
+│   ├── mod.rs
+│   ├── animation.rs
+│   ├── navigation.rs
+│   └── fullscreen.rs
+├── config/
+│   ├── mod.rs
+│   ├── types.rs
+│   ├── parse.rs
+│   ├── defaults.rs
+│   └── toml.rs
 ├── input/
 │   ├── mod.rs
-│   ├── gestures.rs      # trackpad gesture state machine
-│   ├── keyboard.rs      # keybinds
-│   └── mouse.rs         # mouse fallbacks
-├── window/
+│   ├── actions.rs
+│   ├── pointer.rs
+│   └── gestures.rs
+├── grabs/
 │   ├── mod.rs
-│   ├── decorations.rs   # SSD rendering (title bar, resize grabs)
-│   └── stacking.rs      # z-order, raise/lower
-├── shell/
-│   ├── xdg.rs           # xdg-shell implementation
-│   ├── layer.rs         # wlr-layer-shell (bars, launchers)
-│   └── xwayland.rs      # X11 app support
-├── output.rs            # multi-monitor / viewport management
-└── render.rs            # frame rendering, damage tracking, zoom scaling
+│   ├── move_grab.rs
+│   ├── resize_grab.rs
+│   ├── pan_grab.rs
+│   └── navigate_grab.rs
+├── handlers/
+│   ├── mod.rs
+│   ├── compositor.rs
+│   ├── xdg_shell.rs
+│   └── layer_shell.rs
+└── protocols/
+    ├── mod.rs
+    ├── foreign_toplevel.rs
+    └── screencopy.rs
 ```
 
 ## Milestones
@@ -489,12 +529,11 @@ requiring real hardware (udev/TTY). Milestones 1–8 work entirely in winit.
 8. **Config file** _(done)_
 9. **udev backend** _(done)_
 10. **Trackpad gestures** _(done)_
-11. **Multi-monitor**: multiple viewports on same canvas. Independent
-    camera/zoom per output.
-12. **Decorations**: SSD for apps that need it. Resize grab zones with
-    cursor shape changes on hover. Mainly needed for XWayland/legacy Qt.
-13. **XWayland**: run X11 apps (Electron, Steam, etc).
-14. **Polish**: animations, shadows, damage tracking optimization.
+11. **Window rules** — app_id matching, widget mode, state file, xdg-decoration _(done)_
+12. **Decorations** — SSD fallback, title bar, shadows, resize grab zones _(done)_
+13. XWayland — X11 app support
+14. Screenshot/screencast — wlr-screencopy, screen capture
+15. Multi-monitor — multiple viewports on same canvas
 
 Separate project: **driftwm-shell** — GTK4 home screen + system widgets
 via Fabric (see Widgets section).

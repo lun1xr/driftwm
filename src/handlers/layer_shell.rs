@@ -107,8 +107,6 @@ impl WlrLayerShellHandler for DriftWm {
                 rule_position: (rx, ry),
                 position: None,
                 namespace,
-                widget: rule.widget,
-                no_focus: rule.no_focus,
             });
             return;
         }

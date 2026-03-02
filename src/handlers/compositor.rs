@@ -187,7 +187,7 @@ impl CompositorHandler for DriftWm {
                         self.space.map_element(window.clone(), pos, activate);
 
                         if let Some(ref rule) = rule {
-                            // Decoration override: none/server → force SSD (compositor draws nothing = borderless)
+                            // Decoration override: none/server → force SSD on the protocol level
                             if rule.decoration != driftwm::config::DecorationMode::Client {
                                 use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
                                 let toplevel = window.toplevel().unwrap();
@@ -195,6 +195,8 @@ impl CompositorHandler for DriftWm {
                                     state.decoration_mode = Some(Mode::ServerSide);
                                 });
                                 toplevel.send_configure();
+                                // Track in pending_ssd so the decoration creation check below sees it
+                                self.pending_ssd.insert(root.id());
                             }
 
                             if rule.widget {
@@ -215,6 +217,25 @@ impl CompositorHandler for DriftWm {
 
                         if rule.as_ref().is_some_and(|r| r.position.is_some() && !r.widget && !r.no_focus) {
                             self.navigate_to_window(&window, true);
+                        }
+
+                        // Create SSD decorations if the window wants ServerSide mode
+                        // (from window rule OR xdg-decoration protocol negotiation)
+                        // and the window rule isn't DecorationMode::None.
+                        // Use pending_ssd (sideband set) rather than with_pending_state,
+                        // since the double-buffer state may have been consumed by configure/ack.
+                        {
+                            let is_server_side = self.pending_ssd.contains(&root.id());
+                            let is_none_mode = rule.as_ref()
+                                .is_some_and(|r| r.decoration == driftwm::config::DecorationMode::None);
+                            if is_server_side && !is_none_mode && !self.decorations.contains_key(&root.id()) {
+                                let deco = crate::decorations::WindowDecoration::new(
+                                    geo.size.w,
+                                    true,
+                                    &self.config.decorations,
+                                );
+                                self.decorations.insert(root.id(), deco);
+                            }
                         }
 
                         // New window arrived — clear loading cursor
@@ -284,6 +305,19 @@ fn ensure_initial_configure(
 }
 
 impl DriftWm {
+    /// Give keyboard focus to a layer surface if it doesn't already have it.
+    fn focus_exclusive_layer(&mut self, surface: &smithay::reexports::wayland_server::protocol::wl_surface::WlSurface) {
+        let keyboard = self.seat.get_keyboard().unwrap();
+        let already_focused = keyboard
+            .current_focus()
+            .as_ref()
+            .is_some_and(|f| f.0 == *surface);
+        if !already_focused {
+            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+            keyboard.set_focus(self, Some(FocusTarget(surface.clone())), serial);
+        }
+    }
+
     /// Handle a commit for a canvas-positioned layer surface (or subsurface of one).
     /// Returns true if the surface belonged to a canvas layer.
     fn handle_canvas_layer_commit(
@@ -335,15 +369,7 @@ impl DriftWm {
         }
 
         if interactivity == KeyboardInteractivity::Exclusive {
-            let keyboard = self.seat.get_keyboard().unwrap();
-            let already_focused = keyboard
-                .current_focus()
-                .as_ref()
-                .is_some_and(|f| f.0 == root);
-            if !already_focused {
-                let serial = smithay::utils::SERIAL_COUNTER.next_serial();
-                keyboard.set_focus(self, Some(crate::state::FocusTarget(root)), serial);
-            }
+            self.focus_exclusive_layer(&root);
         }
 
         self.popups.commit(surface);
@@ -408,18 +434,8 @@ impl DriftWm {
                 layer_surface.send_configure();
             }
 
-            // Only grab Exclusive focus when the keyboard isn't already on this surface
-            // (prevents stealing focus back on every subsequent commit)
             if interactivity == KeyboardInteractivity::Exclusive {
-                let keyboard = self.seat.get_keyboard().unwrap();
-                let already_focused = keyboard
-                    .current_focus()
-                    .as_ref()
-                    .is_some_and(|f| f.0 == root);
-                if !already_focused {
-                    let serial = smithay::utils::SERIAL_COUNTER.next_serial();
-                    keyboard.set_focus(self, Some(FocusTarget(root)), serial);
-                }
+                self.focus_exclusive_layer(&root);
             }
         }
 

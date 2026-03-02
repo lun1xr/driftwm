@@ -67,15 +67,19 @@ pub(crate) const DOUBLE_TAP_WINDOW_MS: u64 = 300;
 impl DriftWm {
     // ── Swipe ──────────────────────────────────────────────────────────
 
+    fn exit_fullscreen_for_gesture(&mut self) {
+        let pointer = self.seat.get_pointer().unwrap();
+        let pos = pointer.current_location();
+        self.exit_fullscreen_remap_pointer(pos);
+    }
+
     pub fn on_gesture_swipe_begin<I: InputBackend>(&mut self, event: I::GestureSwipeBeginEvent) {
         let fingers = event.fingers();
         let time = Event::time_msec(&event);
 
         // During fullscreen: 3+ finger gestures exit fullscreen first
         if self.fullscreen.is_some() && fingers >= 3 {
-            let pointer = self.seat.get_pointer().unwrap();
-            let pos = pointer.current_location();
-            self.exit_fullscreen_remap_pointer(pos);
+            self.exit_fullscreen_for_gesture();
         }
 
         let state = match fingers {
@@ -291,9 +295,7 @@ impl DriftWm {
         // 2-finger pinch and hold forward to the fullscreen app.
         if self.fullscreen.is_some() {
             if fingers >= 3 {
-                let pointer = self.seat.get_pointer().unwrap();
-                let pos = pointer.current_location();
-                self.exit_fullscreen_remap_pointer(pos);
+                self.exit_fullscreen_for_gesture();
             } else {
                 self.forward_pinch_begin(fingers, time);
                 return;

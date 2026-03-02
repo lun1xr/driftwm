@@ -67,6 +67,7 @@ pub fn init_winit(
     {
         let mut backend = data.state.backend.take().unwrap();
         crate::render::init_background(&mut data.state, backend.renderer(), size.to_logical(1));
+        data.state.shadow_shader = crate::render::compile_shadow_shader(backend.renderer());
         data.state.backend = Some(backend);
     }
 

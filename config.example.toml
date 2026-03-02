@@ -67,6 +67,10 @@
 # distance = 24.0              # activation threshold (screen px from edge)
 # break_force = 32.0           # screen px past snap to break free
 
+[decorations]
+# bg_color = "#303030"           # title bar background (default: dark gray)
+# fg_color = "#FFFFFF"           # close button × color (default: white)
+
 [output]
 # scale = 1.0                 # display scale factor (1.0, 1.5, 2.0)
 

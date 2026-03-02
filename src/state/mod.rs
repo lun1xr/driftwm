@@ -73,8 +73,6 @@ pub struct CanvasLayer {
     /// Internal canvas position (Y-down, top-left). None until first commit reveals size.
     pub position: Option<Point<i32, Logical>>,
     pub namespace: String,
-    pub widget: bool,
-    pub no_focus: bool,
 }
 
 /// Buffered middle-click from a 3-finger tap. Held for DOUBLE_TAP_WINDOW_MS
@@ -152,6 +150,7 @@ pub struct DriftWm {
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub shm_state: ShmState,
+    #[allow(dead_code)]
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<DriftWm>,
     pub data_device_state: DataDeviceState,
@@ -188,10 +187,21 @@ pub struct DriftWm {
     /// True while a compositor grab (pan/resize) owns the cursor icon.
     /// Blocks client cursor updates in `cursor_image()`.
     pub grab_cursor: bool,
+    /// True while the pointer is over an SSD decoration area (title bar, close button, resize border).
+    /// Blocks client cursor updates so the decoration cursor persists.
+    pub decoration_cursor: bool,
     pub cursor_buffers: HashMap<String, CursorFrames>,
 
     // Backend (moved here so protocol handlers can access the renderer)
     pub backend: Option<Backend>,
+    /// Per-window SSD decoration state, keyed by wl_surface ObjectId.
+    pub decorations: HashMap<smithay::reexports::wayland_server::backend::ObjectId, crate::decorations::WindowDecoration>,
+    /// Surfaces that should get SSD (from protocol negotiation or window rules).
+    /// Checked at first commit to create WindowDecoration once size is known.
+    pub pending_ssd: HashSet<smithay::reexports::wayland_server::backend::ObjectId>,
+    /// Compiled shadow shader for SSD decorations.
+    pub shadow_shader: Option<GlesPixelProgram>,
+
     /// Compiled background shader program (compiled once at startup).
     pub background_shader: Option<GlesPixelProgram>,
     /// Cached shader background element (stable Id for damage tracking).
@@ -203,20 +213,29 @@ pub struct DriftWm {
     /// Stores (buffer, original_width, original_height).
     pub background_tile: Option<(MemoryRenderBuffer, i32, i32)>,
 
-    // Protocols
+    // Protocols (fields held for smithay delegate macros — reads happen inside generated code)
     pub dmabuf_state: DmabufState,
     pub dmabuf_global: Option<DmabufGlobal>,
+    #[allow(dead_code)]
     pub cursor_shape_state: CursorShapeManagerState,
+    #[allow(dead_code)]
     pub viewporter_state: ViewporterState,
+    #[allow(dead_code)]
     pub fractional_scale_state: FractionalScaleManagerState,
     pub xdg_activation_state: XdgActivationState,
     pub primary_selection_state: PrimarySelectionState,
     pub data_control_state: DataControlState,
+    #[allow(dead_code)]
     pub pointer_constraints_state: PointerConstraintsState,
+    #[allow(dead_code)]
     pub relative_pointer_state: RelativePointerManagerState,
+    #[allow(dead_code)]
     pub keyboard_shortcuts_inhibit_state: KeyboardShortcutsInhibitState,
+    #[allow(dead_code)]
     pub idle_inhibit_state: IdleInhibitManagerState,
+    #[allow(dead_code)]
     pub presentation_state: PresentationState,
+    #[allow(dead_code)]
     pub decoration_state: XdgDecorationState,
     pub layer_shell_state: WlrLayerShellState,
     pub foreign_toplevel_state: driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState,
@@ -386,8 +405,12 @@ impl DriftWm {
             edge_pan_velocity: None,
             cursor_status: CursorImageStatus::default_named(),
             grab_cursor: false,
+            decoration_cursor: false,
             cursor_buffers: HashMap::new(),
             backend: None,
+            decorations: HashMap::new(),
+            pending_ssd: HashSet::new(),
+            shadow_shader: None,
             background_shader: None,
             cached_bg_element: None,
             last_rendered_camera: Point::from((f64::NAN, f64::NAN)),

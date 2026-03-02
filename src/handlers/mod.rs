@@ -54,15 +54,15 @@ impl SeatHandler for DriftWm {
     }
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, image: CursorImageStatus) {
-        // During a compositor grab (pan, resize), we control the cursor.
-        // Ignore client updates so they don't stomp our grab cursor.
-        if self.grab_cursor {
+        // During a compositor grab (pan, resize) or decoration hover,
+        // we control the cursor. Ignore client updates.
+        if self.grab_cursor || self.decoration_cursor {
             return;
         }
         // During exec loading (after grace period), replace default cursor with
         // Wait but let client surface cursors through (they take priority).
         if self.exec_cursor_deadline.is_some()
-            && self.exec_cursor_show_at.map_or(true, |t| std::time::Instant::now() >= t)
+            && self.exec_cursor_show_at.is_none_or(|t| std::time::Instant::now() >= t)
             && matches!(&image, CursorImageStatus::Named(icon) if *icon == CursorIcon::Default)
         {
             self.cursor_status = CursorImageStatus::Named(CursorIcon::Wait);
@@ -249,11 +249,36 @@ impl XdgDecorationHandler for DriftWm {
     }
 
     fn request_mode(&mut self, toplevel: ToplevelSurface, mode: smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode) {
-        // Accept the client's preference — window rules override at first commit
+        use smithay::reexports::wayland_protocols::xdg::decoration::zv1::server::zxdg_toplevel_decoration_v1::Mode;
+        // Accept the client's preference. Apps that genuinely need SSD (Qt/Vorta)
+        // will request ServerSide; CSD-capable apps (GTK4) typically accept our
+        // initial ClientSide and never call request_mode.
         toplevel.with_pending_state(|state| {
             state.decoration_mode = Some(mode);
         });
         toplevel.send_configure();
+
+        let wl_surface = toplevel.wl_surface().clone();
+        if mode == Mode::ServerSide {
+            self.pending_ssd.insert(wl_surface.id());
+            // If the window is already mapped (request_mode came after first commit),
+            // create the SSD decoration immediately.
+            let window = self.space.elements()
+                .find(|w| w.toplevel().unwrap().wl_surface() == &wl_surface)
+                .cloned();
+            if let Some(window) = window {
+                let geo = window.geometry();
+                if geo.size.w > 0 && !self.decorations.contains_key(&wl_surface.id()) {
+                    let deco = crate::decorations::WindowDecoration::new(
+                        geo.size.w, true, &self.config.decorations,
+                    );
+                    self.decorations.insert(wl_surface.id(), deco);
+                }
+            }
+        } else {
+            self.pending_ssd.remove(&wl_surface.id());
+            self.decorations.remove(&wl_surface.id());
+        }
     }
 
     fn unset_mode(&mut self, toplevel: ToplevelSurface) {

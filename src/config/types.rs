@@ -269,6 +269,31 @@ pub fn applied_rule(
     })
 }
 
+/// Server-side decoration configuration.
+/// Only colors are user-configurable — everything else is hardcoded.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DecorationConfig {
+    pub bg_color: [u8; 4],
+    pub fg_color: [u8; 4],
+}
+
+impl Default for DecorationConfig {
+    fn default() -> Self {
+        Self {
+            bg_color: [0x30, 0x30, 0x30, 0xFF],
+            fg_color: [0xFF, 0xFF, 0xFF, 0xFF],
+        }
+    }
+}
+
+impl DecorationConfig {
+    pub const TITLE_BAR_HEIGHT: i32 = 25;
+    pub const SHADOW_RADIUS: f32 = 14.0;
+    pub const SHADOW_COLOR: [u8; 4] = [0x00, 0x00, 0x00, 0x20];
+    pub const RESIZE_BORDER_WIDTH: i32 = 8;
+    pub const CORNER_RADIUS: i32 = 8;
+}
+
 /// Built-in dot grid shader — used when no shader_path or tile_path is configured.
 pub const DEFAULT_SHADER: &str = include_str!("../../assets/shaders/dot_grid.glsl");
 

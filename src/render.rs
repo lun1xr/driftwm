@@ -24,6 +24,8 @@ use smithay::backend::allocator::Fourcc;
 use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
 use smithay::utils::{Size, Transform};
 
+use smithay::reexports::wayland_server::Resource;
+
 use driftwm::canvas::{self, CanvasPos, canvas_to_screen};
 
 render_elements! {
@@ -35,12 +37,51 @@ render_elements! {
     Cursor=MemoryRenderBufferRenderElement<GlesRenderer>,
 }
 
+// Shadow and Decoration share inner types with Background and Tile respectively.
+// We can't add them to render_elements! because it generates conflicting From impls.
+// Instead we construct them directly using the existing Background/Tile variants.
+// Helpers below create the elements and wrap them in the correct variant.
+
 /// Uniform declarations for background shaders.
 /// Shaders receive only u_camera — zoom is handled externally via RescaleRenderElement.
 pub const BG_UNIFORMS: &[UniformName<'static>] = &[UniformName {
     name: std::borrow::Cow::Borrowed("u_camera"),
     type_: UniformType::_2f,
 }];
+
+/// Shadow shader source — soft box-shadow around SSD windows.
+const SHADOW_SHADER_SRC: &str = include_str!("../assets/shaders/shadow.glsl");
+
+/// Uniform declarations for the shadow shader.
+pub const SHADOW_UNIFORMS: &[UniformName<'static>] = &[
+    UniformName {
+        name: std::borrow::Cow::Borrowed("u_window_rect"),
+        type_: UniformType::_4f,
+    },
+    UniformName {
+        name: std::borrow::Cow::Borrowed("u_radius"),
+        type_: UniformType::_1f,
+    },
+    UniformName {
+        name: std::borrow::Cow::Borrowed("u_color"),
+        type_: UniformType::_4f,
+    },
+    UniformName {
+        name: std::borrow::Cow::Borrowed("u_corner_radius"),
+        type_: UniformType::_1f,
+    },
+];
+
+/// Compile the shadow shader program. Called once at startup alongside the background shader.
+pub fn compile_shadow_shader(renderer: &mut GlesRenderer) -> Option<smithay::backend::renderer::gles::GlesPixelProgram> {
+    match renderer.compile_custom_pixel_shader(SHADOW_SHADER_SRC, SHADOW_UNIFORMS) {
+        Ok(shader) => Some(shader),
+        Err(e) => {
+            tracing::error!("Failed to compile shadow shader: {e}");
+            None
+        }
+    }
+}
 
 /// Build tiled background elements for the current frame.
 ///
@@ -344,11 +385,31 @@ pub fn compose_frame(
     let mut zoomed_normal: Vec<OutputRenderElements> = Vec::new();
     let mut zoomed_widgets: Vec<OutputRenderElements> = Vec::new();
 
+    // Focused surface for decoration focus state
+    let focused_surface = state
+        .seat
+        .get_keyboard()
+        .and_then(|kb| kb.current_focus())
+        .map(|f| f.0);
+
     for window in state.space.elements().rev() {
         let Some(loc) = state.space.element_location(window) else { continue };
         let geom_loc = window.geometry().loc;
+        let geom_size = window.geometry().size;
+        let wl_surface = window.toplevel().unwrap().wl_surface();
+        let is_fullscreen = state.fullscreen.as_ref().is_some_and(|fs| &fs.window == window);
+        let has_ssd = !is_fullscreen && state.decorations.contains_key(&wl_surface.id());
+
         let mut bbox = window.bbox();
         bbox.loc += loc - geom_loc;
+        if has_ssd {
+            let r = driftwm::config::DecorationConfig::SHADOW_RADIUS.ceil() as i32;
+            let bar = driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT;
+            bbox.loc.x -= r;
+            bbox.loc.y -= bar + r;
+            bbox.size.w += 2 * r;
+            bbox.size.h += bar + 2 * r;
+        }
         if !visible_rect.overlaps(bbox) { continue }
 
         let render_loc: Point<i32, Logical> = loc - geom_loc - visible_rect.loc;
@@ -364,13 +425,101 @@ pub fn compose_frame(
             .is_some_and(|tl| driftwm::config::applied_rule(tl.wl_surface()).is_some_and(|r| r.widget));
 
         let target = if is_widget { &mut zoomed_widgets } else { &mut zoomed_normal };
-        target.extend(elems.into_iter().map(|elem| {
-            OutputRenderElements::Window(RescaleRenderElement::from_element(
-                elem,
-                Point::<i32, Physical>::from((0, 0)),
-                state.zoom,
-            ))
-        }));
+
+        if has_ssd {
+            let bar_height = driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT;
+            let is_focused = focused_surface.as_ref().is_some_and(|f| f == wl_surface);
+
+            // Update decoration state (re-render title bar if needed)
+            if let Some(deco) = state.decorations.get_mut(&wl_surface.id()) {
+                deco.update(geom_size.w, is_focused, &state.config.decorations);
+            }
+
+            // Title bar element: positioned above the window
+            if let Some(deco) = state.decorations.get(&wl_surface.id()) {
+                let bar_loc = render_loc + Point::from((0, -bar_height));
+                let bar_physical: Point<f64, Physical> = bar_loc.to_physical_precise_round(scale);
+                if let Ok(bar_elem) = MemoryRenderBufferRenderElement::from_buffer(
+                    renderer,
+                    bar_physical,
+                    &deco.title_bar,
+                    None,
+                    None,
+                    None,
+                    Kind::Unspecified,
+                ) {
+                    target.push(OutputRenderElements::Tile(
+                        RescaleRenderElement::from_element(
+                            bar_elem,
+                            Point::<i32, Physical>::from((0, 0)),
+                            state.zoom,
+                        ),
+                    ));
+                }
+            }
+
+            // Window surface elements
+            target.extend(elems.into_iter().map(|elem| {
+                OutputRenderElements::Window(RescaleRenderElement::from_element(
+                    elem,
+                    Point::<i32, Physical>::from((0, 0)),
+                    state.zoom,
+                ))
+            }));
+
+            // Shadow element: positioned behind the window + title bar.
+            // Position is baked into the area rectangle (like windows/title bars)
+            // so RescaleRenderElement scales from origin (0,0).
+            if let Some(ref shader) = state.shadow_shader {
+                use driftwm::config::DecorationConfig;
+                let radius = DecorationConfig::SHADOW_RADIUS;
+                let r = radius.ceil() as i32;
+                let shadow_w = geom_size.w + 2 * r;
+                let shadow_h = geom_size.h + bar_height + 2 * r;
+                let shadow_loc = render_loc + Point::from((-r, -bar_height - r));
+                let shadow_area = Rectangle::new(shadow_loc, (shadow_w, shadow_h).into());
+
+                let sc = DecorationConfig::SHADOW_COLOR;
+                let shadow_elem = PixelShaderElement::new(
+                    shader.clone(),
+                    shadow_area,
+                    None, // not opaque
+                    1.0,
+                    vec![
+                        Uniform::new("u_window_rect", (
+                            r as f32,
+                            r as f32,
+                            geom_size.w as f32,
+                            (geom_size.h + bar_height) as f32,
+                        )),
+                        Uniform::new("u_radius", radius),
+                        Uniform::new("u_color", (
+                            sc[0] as f32 / 255.0,
+                            sc[1] as f32 / 255.0,
+                            sc[2] as f32 / 255.0,
+                            sc[3] as f32 / 255.0,
+                        )),
+                        Uniform::new("u_corner_radius", DecorationConfig::CORNER_RADIUS as f32),
+                    ],
+                    Kind::Unspecified,
+                );
+                target.push(OutputRenderElements::Background(
+                    RescaleRenderElement::from_element(
+                        shadow_elem,
+                        Point::<i32, Physical>::from((0, 0)),
+                        state.zoom,
+                    ),
+                ));
+            }
+        } else {
+            target.extend(elems.into_iter().map(|elem| {
+                OutputRenderElements::Window(RescaleRenderElement::from_element(
+                    elem,
+                    Point::<i32, Physical>::from((0, 0)),
+                    state.zoom,
+                ))
+            }));
+        }
     }
 
     let canvas_layer_elements = build_canvas_layer_elements(state, renderer, output);

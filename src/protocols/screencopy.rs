@@ -312,6 +312,7 @@ macro_rules! delegate_screencopy {
 pub struct ScreencopyFrameInfo {
     output: Output,
     buffer_size: Size<i32, Physical>,
+    #[allow(dead_code)]
     region_loc: Point<i32, Physical>,
     overlay_cursor: bool,
 }

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 driftwm — a trackpad-first infinite canvas Wayland compositor written in Rust. Windows float on an unbounded 2D plane navigated via trackpad gestures (pan, zoom, pinch). No workspaces, no tiling. Built on [smithay](https://github.com/Smithay/smithay).
 
-The project is in early development (milestone 9 complete). See `docs/DESIGN.md` for the full specification and `docs/CAVEATS.md` for architectural pitfalls.
+The project is in early development (milestone 12 complete). See `docs/DESIGN.md` for the full specification and `docs/CAVEATS.md` for architectural pitfalls.
 
 ## Conventions
 
@@ -45,23 +45,19 @@ Current source layout:
 - `config/` — `mod.rs` (Config struct, load/parse, lookup methods), `types.rs` (Action, Direction, Modifiers, KeyCombo, MouseBinding), `parse.rs` (string→type parsers for combos/actions), `defaults.rs` (default key/mouse bindings, terminal/launcher detection), `toml.rs` (serde structs, config path)
 - `canvas.rs` — coordinate transforms (ScreenPos/CanvasPos), camera math, cone search, zoom helpers (zoom_to_fit, zoom_anchor_camera, snap_zoom, dynamic_min_zoom)
 - `focus.rs` — FocusTarget(WlSurface) newtype with KeyboardTarget/PointerTarget/TouchTarget impls
+- `decorations.rs` — per-window SSD state, CPU-rendered title bar, hit-testing helpers
 - `render.rs` — OutputRenderElements, compose_frame(), post_render(), update_background_element(), tile/cursor/layer rendering helpers
-- `input/` — `mod.rs` (keyboard handling, pointer motion absolute+relative, surface_under hit-testing), `actions.rs` (execute_action dispatch for all keybindings), `pointer.rs` (button/axis handling, compositor resize/pan grabs)
-- `grabs/` — `move_grab.rs` (MoveSurfaceGrab), `resize_grab.rs` (ResizeSurfaceGrab, ResizeState), `pan_grab.rs` (PanGrab for viewport panning)
-- `handlers/` — `compositor.rs` (commit, resize repositioning, dmabuf, layer commit), `layer_shell.rs` (wlr-layer-shell handler), `xdg_shell.rs` (CSD move/resize, window centering, fullscreen, popup grabs), `mod.rs` (seat, data device, output, cursor_shape, foreign toplevel, 20 protocol delegates)
-- `protocols/` — `foreign_toplevel.rs` (zwlr-foreign-toplevel-management-v1, adapted from niri)
-
-Planned additions (from DESIGN.md):
-
-- `window/` — decorations, z-order/stacking
-- `output.rs` — multi-monitor / viewport management
+- `input/` — `mod.rs` (keyboard handling, pointer motion absolute+relative, surface_under hit-testing), `actions.rs` (execute_action dispatch for all keybindings), `pointer.rs` (button/axis handling, compositor resize/pan grabs), `gestures.rs` (trackpad gesture state machine, libinput device config, client forwarding)
+- `grabs/` — `move_grab.rs` (MoveSurfaceGrab), `resize_grab.rs` (ResizeSurfaceGrab, ResizeState), `pan_grab.rs` (PanGrab for viewport panning), `navigate_grab.rs` (NavigateGrab for directional window navigation)
+- `handlers/` — `compositor.rs` (commit, resize repositioning, dmabuf, layer commit), `layer_shell.rs` (wlr-layer-shell handler), `xdg_shell.rs` (CSD move/resize, window centering, fullscreen, popup grabs), `mod.rs` (seat, data device, output, cursor_shape, foreign toplevel, session lock, xdg-decoration, 20+ protocol delegates)
+- `protocols/` — `foreign_toplevel.rs` (zwlr-foreign-toplevel-management-v1), `screencopy.rs` (wlr-screencopy)
 
 ## Key Design Decisions
 
-- **CSD-first**: compositor advertises only `close` and `fullscreen` capabilities (no maximize/minimize). SSD fallback for XWayland/Qt apps that need it.
+- **CSD-first**: compositor advertises only `close` and `fullscreen` capabilities (no maximize/minimize). SSD fallback: 25px title bar (rounded corners, radius 8), × close button, Gaussian shadow shader (radius 14), invisible resize borders (8px). Configurable `bg_color`/`fg_color` via `[decorations]`.
 - **Gesture-driven**: 2-finger pan/pinch for viewport, 3-finger for window manipulation, 4-finger for navigation. Mouse equivalents use Super+click modifiers.
 - **Canvas background**: scrolls with viewport (not fixed to screen). Default is a GLSL dot-grid shader; static shaders are cached and only re-render on viewport changes.
-- **Widgets**: eww windows as regular `xdg-toplevel` surfaces placed near `(0, 0)`, matched by window rules (`app_id = "eww-*"`).
+- **Widgets**: layer-shell surfaces or xdg-toplevel windows placed at canvas positions via window rules (`app_id` glob matching, `position` field). Canvas layers bypass the layer map and render at fixed canvas coordinates.
 - **External tools**: launcher, lock screen, screenshots are external programs (bemenu-run, swaylock, grim) — not built into the compositor.
 
 ## Reference Codebases

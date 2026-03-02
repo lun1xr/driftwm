@@ -6,6 +6,7 @@ use smithay::{
         },
         SeatHandler,
     },
+    reexports::wayland_server::Resource,
     utils::{Logical, Point},
 };
 
@@ -142,8 +143,13 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
             // Collect other windows' edges (exclude self and widgets)
             let self_surface = self.window.toplevel().unwrap().wl_surface().clone();
             let window_size = self.window.geometry().size;
+            let self_bar = if data.decorations.contains_key(&self_surface.id()) {
+                config::DecorationConfig::TITLE_BAR_HEIGHT
+            } else {
+                0
+            };
             let extent_x = window_size.w as f64;
-            let extent_y = window_size.h as f64;
+            let extent_y = window_size.h as f64 + self_bar as f64;
 
             let mut others_x: Vec<(f64, f64)> = Vec::new();
             let mut others_y: Vec<(f64, f64)> = Vec::new();
@@ -157,8 +163,14 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
                 }
                 let Some(loc) = data.space.element_location(w) else { continue };
                 let size = w.geometry().size;
+                // For SSD windows, include the title bar in the snap boundary
+                let bar = if data.decorations.contains_key(&surface.id()) {
+                    config::DecorationConfig::TITLE_BAR_HEIGHT
+                } else {
+                    0
+                };
                 others_x.push((loc.x as f64, loc.x as f64 + size.w as f64));
-                others_y.push((loc.y as f64, loc.y as f64 + size.h as f64));
+                others_y.push((loc.y as f64 - bar as f64, loc.y as f64 + size.h as f64));
             }
 
             let params_x = SnapParams {
@@ -172,6 +184,9 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
                 &mut self.snap.x, &mut self.snap.cooldown_x, natural_x, &params_x,
             );
 
+            // Shift y into visual space (title bar top) for snapping,
+            // then convert back to geometry origin.
+            let visual_y = natural_y - self_bar as f64;
             let params_y = SnapParams {
                 extent: extent_y,
                 others: &others_y,
@@ -179,9 +194,10 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
                 threshold: effective_distance,
                 break_force: effective_break,
             };
-            let final_y = Self::update_axis(
-                &mut self.snap.y, &mut self.snap.cooldown_y, natural_y, &params_y,
+            let final_visual_y = Self::update_axis(
+                &mut self.snap.y, &mut self.snap.cooldown_y, visual_y, &params_y,
             );
+            let final_y = final_visual_y + self_bar as f64;
 
             (final_x, final_y)
         };

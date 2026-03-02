@@ -48,6 +48,7 @@ Early development — usable as a daily driver on single-monitor setups.
 - Trackpad gestures: 3-finger pan/move/resize, pinch zoom, 4-finger navigate/home/overview
 - Runs nested (winit) or on real hardware (udev/DRM with libseat)
 - TOML config — all keybindings, mouse bindings, and input device settings are configurable
+- Server-side decorations with title bar, shadows, and resize borders for non-CSD apps
 - 20+ Wayland protocols: DMA-BUF, popups, clipboard, layer shell, and more
 
 ## Build & run
@@ -124,7 +125,7 @@ only specify what you want to change. Use `"none"` to unbind a default binding.
 9. **udev backend** — DRM/KMS, libinput, libseat session management _(done)_
 10. **Trackpad gestures** — gesture state machine, libinput device config _(done)_
 11. **Window rules** — app*id matching, widget mode, state file, xdg-decoration *(done)\_
-12. Decorations — SSD fallback, resize grab zones
+12. **Decorations** — SSD fallback, title bar, shadows, resize grab zones _(done)_
 13. XWayland — X11 app support
 14. Screenshot/screencast — wlr-screencopy, screen capture
 15. Multi-monitor — multiple viewports on same canvas

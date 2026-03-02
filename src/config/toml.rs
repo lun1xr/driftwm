@@ -14,6 +14,7 @@ pub(super) struct ConfigFile {
     pub snap: SnapConfig,
     pub output: OutputConfig,
     pub background: BackgroundFileConfig,
+    pub decorations: DecorationFileConfig,
     pub autostart: Option<Vec<String>>,
     pub keybindings: Option<HashMap<String, String>>,
     pub mouse: Option<HashMap<String, String>>,
@@ -106,6 +107,13 @@ pub(super) struct OutputConfig {
 pub(super) struct BackgroundFileConfig {
     pub shader_path: Option<String>,
     pub tile_path: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
+pub(super) struct DecorationFileConfig {
+    pub bg_color: Option<String>,
+    pub fg_color: Option<String>,
 }
 
 #[derive(Deserialize)]

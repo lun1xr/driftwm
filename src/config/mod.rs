@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use smithay::input::keyboard::{Keysym, ModifiersState};
 
 use defaults::{default_bindings, default_mouse_bindings};
-use toml::{ConfigFile, WindowRuleFile, expand_tilde};
+use toml::{ConfigFile, DecorationFileConfig, WindowRuleFile, expand_tilde};
 
 pub struct Config {
     pub mod_key: ModKey,
@@ -52,6 +52,7 @@ pub struct Config {
     pub autostart: Vec<String>,
     pub cursor_theme: Option<String>,
     pub cursor_size: Option<u32>,
+    pub decorations: DecorationConfig,
     pub window_rules: Vec<WindowRule>,
     bindings: HashMap<KeyCombo, Action>,
     pub mouse_bindings: HashMap<MouseBinding, MouseAction>,
@@ -229,6 +230,8 @@ impl Config {
             }
         };
 
+        let decorations = parse_decoration_config(raw.decorations);
+
         let window_rules = raw
             .window_rules
             .unwrap_or_default()
@@ -257,6 +260,7 @@ impl Config {
             snap_distance: raw.snap.distance.unwrap_or(24.0),
             snap_break_force: raw.snap.break_force.unwrap_or(32.0),
             background,
+            decorations,
             trackpad,
             keyboard_layout,
             cursor_theme: raw.cursor.theme,
@@ -294,6 +298,45 @@ impl Config {
         } else {
             rule.app_id == app_id
         }
+    }
+}
+
+fn parse_color(s: &str) -> Option<[u8; 4]> {
+    let hex = s.strip_prefix('#')?;
+    match hex.len() {
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            Some([r, g, b, 0xFF])
+        }
+        8 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+            let a = u8::from_str_radix(&hex[6..8], 16).ok()?;
+            Some([r, g, b, a])
+        }
+        _ => None,
+    }
+}
+
+fn parse_decoration_config(raw: DecorationFileConfig) -> DecorationConfig {
+    let defaults = DecorationConfig::default();
+
+    let resolve = |opt: Option<String>, default: [u8; 4], name: &str| -> [u8; 4] {
+        match opt {
+            Some(s) => parse_color(&s).unwrap_or_else(|| {
+                tracing::warn!("Invalid {name} color '{s}', using default");
+                default
+            }),
+            None => default,
+        }
+    };
+
+    DecorationConfig {
+        bg_color: resolve(raw.bg_color, defaults.bg_color, "bg_color"),
+        fg_color: resolve(raw.fg_color, defaults.fg_color, "fg_color"),
     }
 }
 

@@ -18,6 +18,7 @@ use smithay::{
 
 use driftwm::canvas::{self, CanvasPos, canvas_to_screen};
 use driftwm::config::{self, MouseAction};
+use crate::decorations::DecorationHit;
 use crate::grabs::{MoveSurfaceGrab, NavigateGrab, PanGrab, ResizeState, ResizeSurfaceGrab, SnapState};
 use crate::state::{DriftWm, FocusTarget, PendingMiddleClick};
 
@@ -106,6 +107,67 @@ impl DriftWm {
                 );
                 pointer.frame(self);
                 return;
+            }
+
+            // SSD decoration clicks: title bar → move, close button → close, resize border → resize
+            if let Some((window, hit)) = self.decoration_under(pos) {
+                let wl_surface = window.toplevel().unwrap().wl_surface().clone();
+                let is_widget = config::applied_rule(&wl_surface).is_some_and(|r| r.widget);
+
+                if button == config::BTN_LEFT {
+                    match hit {
+                        DecorationHit::CloseButton => {
+                            window.toplevel().unwrap().send_close();
+                            return;
+                        }
+                        DecorationHit::TitleBar if !is_widget => {
+                            // Focus + raise + start move grab
+                            self.space.raise_element(&window, true);
+                            self.enforce_below_windows();
+                            keyboard.set_focus(
+                                self,
+                                Some(FocusTarget(wl_surface)),
+                                serial,
+                            );
+                            let initial_window_location =
+                                self.space.element_location(&window).unwrap();
+                            let start_data = GrabStartData {
+                                focus: None,
+                                button,
+                                location: pos,
+                            };
+                            let grab = MoveSurfaceGrab {
+                                start_data,
+                                window,
+                                initial_window_location,
+                                snap: SnapState::default(),
+                            };
+                            pointer.set_grab(self, grab, serial, Focus::Clear);
+                            return;
+                        }
+                        DecorationHit::ResizeBorder(edge) if !is_widget => {
+                            self.space.raise_element(&window, true);
+                            self.enforce_below_windows();
+                            keyboard.set_focus(
+                                self,
+                                Some(FocusTarget(wl_surface.clone())),
+                                serial,
+                            );
+                            self.start_compositor_resize_with_edge(
+                                &pointer, &window, pos, button, serial, Some(edge),
+                            );
+                            return;
+                        }
+                        _ => {
+                            // Widget title bar or other — just focus
+                            keyboard.set_focus(
+                                self,
+                                Some(FocusTarget(wl_surface)),
+                                serial,
+                            );
+                        }
+                    }
+                }
             }
 
             // Check configured mouse bindings
@@ -217,9 +279,9 @@ impl DriftWm {
         pointer.frame(self);
     }
 
-    /// Start a compositor-side resize grab. Edges are inferred from which
-    /// quadrant of the window the pointer is in.
-    fn start_compositor_resize(
+    /// Start a compositor-side resize grab. If `explicit_edge` is provided, use it;
+    /// otherwise infer edges from pointer position within the window.
+    pub(super) fn start_compositor_resize(
         &mut self,
         pointer: &smithay::input::pointer::PointerHandle<DriftWm>,
         window: &smithay::desktop::Window,
@@ -227,10 +289,23 @@ impl DriftWm {
         button: u32,
         serial: smithay::utils::Serial,
     ) {
+        self.start_compositor_resize_with_edge(pointer, window, pos, button, serial, None);
+    }
+
+    pub(super) fn start_compositor_resize_with_edge(
+        &mut self,
+        pointer: &smithay::input::pointer::PointerHandle<DriftWm>,
+        window: &smithay::desktop::Window,
+        pos: Point<f64, smithay::utils::Logical>,
+        button: u32,
+        serial: smithay::utils::Serial,
+        explicit_edge: Option<xdg_toplevel::ResizeEdge>,
+    ) {
         let initial_window_location = self.space.element_location(window).unwrap();
         let initial_window_size = window.geometry().size;
 
-        let edges = edges_from_position(pos, initial_window_location, initial_window_size);
+        let edges = explicit_edge
+            .unwrap_or_else(|| edges_from_position(pos, initial_window_location, initial_window_size));
 
         // Store resize state for commit() repositioning
         let wl_surface = window.toplevel().unwrap().wl_surface().clone();

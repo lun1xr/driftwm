@@ -17,7 +17,11 @@ use smithay::{
     wayland::shell::wlr_layer::Layer as WlrLayer,
 };
 
+use smithay::desktop::Window;
+use smithay::reexports::wayland_server::Resource;
+
 use driftwm::canvas::{ScreenPos, screen_to_canvas};
+use crate::decorations::DecorationHit;
 use crate::state::{DriftWm, FocusTarget};
 
 impl DriftWm {
@@ -247,6 +251,7 @@ impl DriftWm {
             self.pointer_over_layer = false;
             pointer.motion(self, under, &MotionEvent { location: canvas_pos, serial, time });
             pointer.frame(self);
+            self.update_decoration_cursor(canvas_pos);
             return;
         }
 
@@ -262,6 +267,7 @@ impl DriftWm {
         self.pointer_over_layer = false;
         pointer.motion(self, None, &MotionEvent { location: canvas_pos, serial, time });
         pointer.frame(self);
+        self.update_decoration_cursor(canvas_pos);
     }
 
     /// Handle relative pointer motion (libinput mice/trackpads).
@@ -354,6 +360,7 @@ impl DriftWm {
             self.pointer_over_layer = false;
             pointer.motion(self, under, &MotionEvent { location: canvas_pos, serial, time });
             pointer.frame(self);
+            self.update_decoration_cursor(canvas_pos);
             return;
         }
 
@@ -367,30 +374,160 @@ impl DriftWm {
         self.pointer_over_layer = false;
         pointer.motion(self, None, &MotionEvent { location: canvas_pos, serial, time });
         pointer.frame(self);
+        self.update_decoration_cursor(canvas_pos);
     }
 
     /// Find the Wayland surface and local coordinates under the given canvas position.
     /// This is the foundation for all hit-testing — focus, gestures, resize grabs.
+    /// Also checks SSD decoration areas (title bar, resize borders), interleaved
+    /// with window content in z-order so a higher window's content takes priority
+    /// over a lower window's decorations.
     pub fn surface_under(
         &self,
         pos: Point<f64, smithay::utils::Logical>,
     ) -> Option<(FocusTarget, Point<f64, smithay::utils::Logical>)> {
-        self.space
-            .element_under(pos)
-            .filter(|(window, _)| {
-                !driftwm::config::applied_rule(window.toplevel().unwrap().wl_surface())
-                    .is_some_and(|r| r.no_focus)
-            })
-            .and_then(|(window, window_loc)| {
-                window
-                    .surface_under(
-                        pos - window_loc.to_f64(),
-                        WindowSurfaceType::ALL,
-                    )
-                    .map(|(surface, surface_loc)| {
-                        (FocusTarget(surface), (surface_loc + window_loc).to_f64())
-                    })
-            })
+        let bar_height = driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT;
+        let border_width = driftwm::config::DecorationConfig::RESIZE_BORDER_WIDTH;
+
+        for window in self.space.elements().rev() {
+            let wl_surface = window.toplevel().unwrap().wl_surface();
+            if driftwm::config::applied_rule(wl_surface).is_some_and(|r| r.no_focus) {
+                continue;
+            }
+
+            let Some(loc) = self.space.element_location(window) else { continue };
+
+            // element_location returns the geometry origin, but surface_under
+            // expects coords relative to the surface origin (which includes
+            // client-side shadows/margins). The offset is geometry().loc.
+            let geom_offset = window.geometry().loc;
+            let surface_origin = loc - geom_offset;
+
+            // Check window content first (higher priority than decorations)
+            if let Some((surface, surface_loc)) = window.surface_under(
+                pos - surface_origin.to_f64(),
+                WindowSurfaceType::ALL,
+            ) {
+                return Some((FocusTarget(surface), (surface_loc + surface_origin).to_f64()));
+            }
+
+            // Then check SSD decoration areas for this window
+            if self.decorations.contains_key(&wl_surface.id()) {
+                let size = window.geometry().size;
+                if crate::decorations::close_button_contains(pos, loc, size.w, bar_height)
+                    || crate::decorations::title_bar_contains(pos, loc, size.w, bar_height)
+                    || crate::decorations::resize_edge_at(pos, loc, size, bar_height, border_width).is_some()
+                {
+                    return Some((FocusTarget(wl_surface.clone()), loc.to_f64()));
+                }
+            }
+        }
+        None
+    }
+
+    /// Update cursor icon based on what decoration area the pointer is over.
+    /// Called after pointer motion to set resize/pointer cursors for SSD areas.
+    fn update_decoration_cursor(&mut self, canvas_pos: Point<f64, smithay::utils::Logical>) {
+        if self.grab_cursor || self.pointer_over_layer {
+            return;
+        }
+        match self.decoration_under(canvas_pos) {
+            Some((ref window, DecorationHit::CloseButton)) => {
+                self.decoration_cursor = true;
+                self.cursor_status =
+                    smithay::input::pointer::CursorImageStatus::Named(
+                        smithay::input::pointer::CursorIcon::Pointer,
+                    );
+                self.set_close_hovered(window, true);
+            }
+            Some((ref window, DecorationHit::ResizeBorder(edge))) => {
+                self.decoration_cursor = true;
+                self.cursor_status =
+                    smithay::input::pointer::CursorImageStatus::Named(
+                        crate::input::pointer::resize_cursor(edge),
+                    );
+                self.set_close_hovered(window, false);
+            }
+            Some((ref window, DecorationHit::TitleBar)) => {
+                self.decoration_cursor = true;
+                self.cursor_status =
+                    smithay::input::pointer::CursorImageStatus::default_named();
+                self.set_close_hovered(window, false);
+            }
+            None => {
+                if self.decoration_cursor {
+                    self.decoration_cursor = false;
+                    self.cursor_status =
+                        smithay::input::pointer::CursorImageStatus::default_named();
+                    self.clear_all_close_hovered();
+                }
+            }
+        }
+    }
+
+    /// Set the close button hover state for a specific window's decoration.
+    fn set_close_hovered(&mut self, window: &Window, hovered: bool) {
+        let wl_surface = window.toplevel().unwrap().wl_surface();
+        if let Some(deco) = self.decorations.get_mut(&wl_surface.id())
+            && deco.close_hovered != hovered
+        {
+            deco.close_hovered = hovered;
+            deco.title_bar = crate::decorations::render_title_bar(
+                deco.width, deco.focused, hovered, &self.config.decorations,
+            );
+        }
+    }
+
+    /// Clear close button hover on all decorations (when leaving decoration areas).
+    fn clear_all_close_hovered(&mut self) {
+        for deco in self.decorations.values_mut() {
+            if deco.close_hovered {
+                deco.close_hovered = false;
+                deco.title_bar = crate::decorations::render_title_bar(
+                    deco.width, deco.focused, false, &self.config.decorations,
+                );
+            }
+        }
+    }
+
+    /// Check if a canvas position hits an SSD decoration area.
+    /// Returns the window and what part of the decoration was hit.
+    pub fn decoration_under(
+        &self,
+        pos: Point<f64, smithay::utils::Logical>,
+    ) -> Option<(Window, DecorationHit)> {
+        let bar_height = driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT;
+        let border_width = driftwm::config::DecorationConfig::RESIZE_BORDER_WIDTH;
+
+        // Iterate in z-order (topmost first, matching space.elements().rev())
+        for window in self.space.elements().rev() {
+            let wl_surface = window.toplevel().unwrap().wl_surface();
+            if !self.decorations.contains_key(&wl_surface.id()) {
+                continue;
+            }
+            let Some(loc) = self.space.element_location(window) else {
+                continue;
+            };
+            let size = window.geometry().size;
+
+            // Close button (checked before title bar)
+            if crate::decorations::close_button_contains(pos, loc, size.w, bar_height) {
+                return Some((window.clone(), DecorationHit::CloseButton));
+            }
+
+            // Title bar
+            if crate::decorations::title_bar_contains(pos, loc, size.w, bar_height) {
+                return Some((window.clone(), DecorationHit::TitleBar));
+            }
+
+            // Resize borders
+            if let Some(edge) =
+                crate::decorations::resize_edge_at(pos, loc, size, bar_height, border_width)
+            {
+                return Some((window.clone(), DecorationHit::ResizeBorder(edge)));
+            }
+        }
+        None
     }
 
     /// Find a canvas-positioned layer surface under the given canvas position.
@@ -400,7 +537,7 @@ impl DriftWm {
         canvas_pos: Point<f64, smithay::utils::Logical>,
     ) -> Option<(FocusTarget, Point<f64, smithay::utils::Logical>)> {
         for cl in &self.canvas_layers {
-            if cl.no_focus {
+            if driftwm::config::applied_rule(cl.surface.wl_surface()).is_some_and(|r| r.no_focus) {
                 continue;
             }
             let Some(pos) = cl.position else { continue; };
