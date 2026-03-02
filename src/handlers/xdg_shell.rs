@@ -150,6 +150,18 @@ impl XdgShellHandler for DriftWm {
             .find(|w| w.toplevel().unwrap().wl_surface() == &wl_surface)
             .cloned();
         if let Some(ref window) = window {
+            // Clear keyboard focus if this was the focused window
+            let keyboard = self.seat.get_keyboard().unwrap();
+            if keyboard
+                .current_focus()
+                .is_some_and(|f| &f.0 == &wl_surface)
+            {
+                keyboard.set_focus(
+                    self,
+                    None::<FocusTarget>,
+                    smithay::utils::SERIAL_COUNTER.next_serial(),
+                );
+            }
             // If the destroyed window was fullscreen, restore viewport
             if self.fullscreen.as_ref().is_some_and(|fs| &fs.window == window) {
                 let fs = self.fullscreen.take().unwrap();

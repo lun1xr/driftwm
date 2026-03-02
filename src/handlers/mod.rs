@@ -335,3 +335,55 @@ impl ScreencopyHandler for DriftWm {
 }
 
 driftwm::delegate_screencopy!(DriftWm);
+
+use smithay::delegate_session_lock;
+use smithay::wayland::session_lock::{
+    LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker,
+};
+use crate::state::SessionLock;
+
+impl SessionLockHandler for DriftWm {
+    fn lock_state(&mut self) -> &mut SessionLockManagerState {
+        &mut self.session_lock_manager_state
+    }
+
+    fn lock(&mut self, confirmation: SessionLocker) {
+        tracing::info!("Session lock requested");
+        self.session_lock = SessionLock::Pending(confirmation);
+        // Clear loading cursor so it doesn't linger after unlock
+        self.exec_cursor_deadline = None;
+        self.cursor_status = smithay::input::pointer::CursorImageStatus::default_named();
+        // Clear keyboard focus — no window should be interactable
+        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+        let keyboard = self.seat.get_keyboard().unwrap();
+        keyboard.set_focus(self, None::<FocusTarget>, serial);
+        self.mark_all_dirty();
+    }
+
+    fn unlock(&mut self) {
+        tracing::info!("Session unlocked");
+        self.session_lock = SessionLock::Unlocked;
+        self.lock_surface = None;
+        // Restore focus to the most recent window
+        if let Some(window) = self.focus_history.first().cloned() {
+            let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+            let keyboard = self.seat.get_keyboard().unwrap();
+            let surface = window.toplevel().unwrap().wl_surface().clone();
+            keyboard.set_focus(self, Some(FocusTarget(surface)), serial);
+        }
+        self.mark_all_dirty();
+    }
+
+    fn new_surface(&mut self, surface: LockSurface, _output: WlOutput) {
+        // Configure lock surface to fill the output
+        let output_size = self.get_viewport_size();
+        surface.with_pending_state(|state| {
+            state.size = Some((output_size.w as u32, output_size.h as u32).into());
+        });
+        surface.send_configure();
+        self.lock_surface = Some(surface);
+    }
+
+}
+
+delegate_session_lock!(DriftWm);

@@ -24,6 +24,22 @@ impl DriftWm {
     /// Process a single input event from any backend (winit, libinput, etc).
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         self.mark_all_dirty();
+
+        // When locked, only keyboard (for VT switch) and pointer motion are processed
+        if !matches!(self.session_lock, crate::state::SessionLock::Unlocked) {
+            match event {
+                InputEvent::Keyboard { event } => self.on_keyboard::<I>(event),
+                InputEvent::PointerMotion { event } => self.on_pointer_motion_relative::<I>(event),
+                InputEvent::PointerMotionAbsolute { event } => {
+                    self.on_pointer_motion_absolute::<I>(event)
+                }
+                InputEvent::PointerButton { event } => self.on_pointer_button::<I>(event),
+                InputEvent::PointerAxis { event } => self.on_pointer_axis::<I>(event),
+                _ => {}
+            }
+            return;
+        }
+
         match event {
             InputEvent::Keyboard { event } => self.on_keyboard::<I>(event),
             InputEvent::PointerMotion { event } => self.on_pointer_motion_relative::<I>(event),
@@ -50,6 +66,29 @@ impl DriftWm {
         let key_state = event.state();
         let keycode = event.key_code();
         let keycode_u32: u32 = keycode.into();
+
+        // When session is locked, only allow VT switching — forward everything else
+        if !matches!(self.session_lock, crate::state::SessionLock::Unlocked) {
+            let keyboard = self.seat.get_keyboard().unwrap();
+            keyboard.input::<(), _>(
+                self, keycode, key_state, serial, time,
+                |state, _modifiers, handle| {
+                    if key_state == KeyState::Pressed {
+                        let raw = handle.modified_sym().raw();
+                        if (0x1008FE01..=0x1008FE0C).contains(&raw) {
+                            let vt = (raw - 0x1008FE01 + 1) as i32;
+                            if let Some(ref mut session) = state.session
+                                && let Err(e) = session.change_vt(vt)
+                            {
+                                tracing::warn!("Failed to switch to VT{vt}: {e}");
+                            }
+                        }
+                    }
+                    FilterResult::Forward
+                },
+            );
+            return;
+        }
 
         // Clear key repeat on release of the held key
         if key_state == KeyState::Released
@@ -135,6 +174,19 @@ impl DriftWm {
         // position_transformed gives screen-local coords (0..width, 0..height)
         let screen_pos = event.position_transformed(output_geo.size);
         let canvas_pos = screen_to_canvas(ScreenPos(screen_pos), self.camera, self.zoom).0;
+
+        // When locked, pointer only targets the lock surface
+        if !matches!(self.session_lock, crate::state::SessionLock::Unlocked) {
+            let serial = SERIAL_COUNTER.next_serial();
+            let time = Event::time_msec(&event);
+            let pointer = self.seat.get_pointer().unwrap();
+            let focus = self.lock_surface.as_ref().map(|ls| {
+                (FocusTarget(ls.wl_surface().clone()), Point::<f64, smithay::utils::Logical>::from((0.0, 0.0)))
+            });
+            pointer.motion(self, focus, &MotionEvent { location: screen_pos, serial, time });
+            pointer.frame(self);
+            return;
+        }
         let serial = SERIAL_COUNTER.next_serial();
         let time = Event::time_msec(&event);
         let pointer = self.seat.get_pointer().unwrap();
@@ -189,6 +241,23 @@ impl DriftWm {
         &mut self,
         event: I::PointerMotionEvent,
     ) {
+        // When locked, pointer only targets the lock surface
+        if !matches!(self.session_lock, crate::state::SessionLock::Unlocked) {
+            let pointer = self.seat.get_pointer().unwrap();
+            let old_pos = pointer.current_location();
+            let delta = event.delta();
+            let new_pos: Point<f64, smithay::utils::Logical> =
+                (old_pos.x + delta.x, old_pos.y + delta.y).into();
+            let serial = SERIAL_COUNTER.next_serial();
+            let time = Event::time_msec(&event);
+            let focus = self.lock_surface.as_ref().map(|ls| {
+                (FocusTarget(ls.wl_surface().clone()), Point::<f64, smithay::utils::Logical>::from((0.0, 0.0)))
+            });
+            pointer.motion(self, focus, &MotionEvent { location: new_pos, serial, time });
+            pointer.frame(self);
+            return;
+        }
+
         let pointer = self.seat.get_pointer().unwrap();
         let old_canvas = pointer.current_location();
         let serial = SERIAL_COUNTER.next_serial();

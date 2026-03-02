@@ -34,6 +34,7 @@ use smithay::wayland::idle_inhibit::IdleInhibitManagerState;
 use smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState;
 use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::presentation::PresentationState;
+use smithay::wayland::session_lock::{LockSurface, SessionLockManagerState, SessionLocker};
 use smithay::wayland::shell::wlr_layer::WlrLayerShellState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
@@ -83,6 +84,15 @@ pub struct PendingMiddleClick {
     pub press_time: u32,
     pub release_time: Option<u32>,
     pub timer_token: RegistrationToken,
+}
+
+/// Session lock state machine: Unlocked → Pending → Locked → Unlocked.
+pub enum SessionLock {
+    Unlocked,
+    /// Lock requested; screen goes black until lock surface commits.
+    Pending(SessionLocker),
+    /// Lock confirmed; rendering only the lock surface.
+    Locked,
 }
 
 pub use crate::focus::FocusTarget;
@@ -212,6 +222,9 @@ pub struct DriftWm {
     pub foreign_toplevel_state: driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState,
     pub screencopy_state: driftwm::protocols::screencopy::ScreencopyManagerState,
     pub pending_screencopies: Vec<driftwm::protocols::screencopy::Screencopy>,
+    pub session_lock_manager_state: SessionLockManagerState,
+    pub session_lock: SessionLock,
+    pub lock_surface: Option<LockSurface>,
 
     /// True when pointer focus is a layer surface (screen-fixed, not canvas-relative).
     /// Guards synthetic pointer adjustments in camera/zoom animations.
@@ -328,6 +341,7 @@ impl DriftWm {
             driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState::new::<Self, _>(&dh, |_| true);
         let screencopy_state =
             driftwm::protocols::screencopy::ScreencopyManagerState::new::<Self, _>(&dh, |_| true);
+        let session_lock_manager_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
 
         let config = Config::load();
 
@@ -394,6 +408,9 @@ impl DriftWm {
             foreign_toplevel_state,
             screencopy_state,
             pending_screencopies: Vec::new(),
+            session_lock_manager_state,
+            session_lock: SessionLock::Unlocked,
+            lock_surface: None,
             pointer_over_layer: false,
             canvas_layers: Vec::new(),
             config,

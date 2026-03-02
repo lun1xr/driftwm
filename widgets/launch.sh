@@ -3,6 +3,7 @@
 # Each gets its own app_id for window rule matching.
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+export PATH="$HOME/.local/bin:$PATH"
 
 launch() {
     local name="$1" cols="$2" lines="$3" script="$4"

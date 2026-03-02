@@ -94,6 +94,27 @@ impl CompositorHandler for DriftWm {
         // Without this, bbox_from_surface_tree() can't see any surfaces and returns 0x0.
         smithay::backend::renderer::utils::on_commit_buffer_handler::<DriftWm>(surface);
 
+        // Session lock: confirm lock on first buffer commit from the lock surface
+        if let crate::state::SessionLock::Pending(_) = &self.session_lock {
+            let is_lock_surface = self
+                .lock_surface
+                .as_ref()
+                .is_some_and(|ls| ls.wl_surface() == surface);
+            if is_lock_surface {
+                // Take the locker out of the enum to call lock() (consumes it)
+                let old = std::mem::replace(&mut self.session_lock, crate::state::SessionLock::Locked);
+                if let crate::state::SessionLock::Pending(locker) = old {
+                    locker.lock();
+                    tracing::info!("Session lock confirmed");
+                    // Give keyboard focus to the lock surface
+                    let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+                    let keyboard = self.seat.get_keyboard().unwrap();
+                    keyboard.set_focus(self, Some(FocusTarget(surface.clone())), serial);
+                }
+                return;
+            }
+        }
+
         // For subsurfaces, walk up to root and notify the window
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();

@@ -279,6 +279,32 @@ pub fn update_background_element(
     (camera_moved, zoom_changed)
 }
 
+/// Build render elements for a locked session: only the lock surface.
+/// No compositor cursor — the lock client manages its own visuals.
+fn compose_lock_frame(
+    state: &crate::state::DriftWm,
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    _cursor_elements: Vec<MemoryRenderBufferRenderElement<GlesRenderer>>,
+) -> Vec<OutputRenderElements> {
+    let mut elements = Vec::new();
+
+    if let Some(lock_surface) = &state.lock_surface {
+        let output_scale = output.current_scale().fractional_scale();
+        let lock_elements = smithay::backend::renderer::element::surface::render_elements_from_surface_tree(
+            renderer,
+            lock_surface.wl_surface(),
+            (0, 0),
+            Scale::from(output_scale),
+            1.0,
+            Kind::Unspecified,
+        );
+        elements.extend(lock_elements.into_iter().map(OutputRenderElements::Layer));
+    }
+
+    elements
+}
+
 /// Assemble all render elements for a frame.
 /// Caller provides cursor elements (built before taking the renderer).
 pub fn compose_frame(
@@ -287,6 +313,11 @@ pub fn compose_frame(
     output: &Output,
     cursor_elements: Vec<MemoryRenderBufferRenderElement<GlesRenderer>>,
 ) -> Vec<OutputRenderElements> {
+    // Session lock: render only lock surface (or black) + cursor
+    if !matches!(state.session_lock, crate::state::SessionLock::Unlocked) {
+        return compose_lock_frame(state, renderer, output, cursor_elements);
+    }
+
     // Lazy re-init background after config reload cleared the cached state
     if state.background_shader.is_none()
         && state.cached_bg_element.is_none()
@@ -650,6 +681,17 @@ pub fn post_render(state: &mut crate::state::DriftWm, output: &Output) {
         cl.surface.send_frame(output, time, Some(Duration::ZERO), |_, _| {
             Some(output.clone())
         });
+    }
+
+    // Lock surface frame callback
+    if let Some(lock_surface) = &state.lock_surface {
+        smithay::desktop::utils::send_frames_surface_tree(
+            lock_surface.wl_surface(),
+            output,
+            time,
+            Some(Duration::ZERO),
+            |_, _| Some(output.clone()),
+        );
     }
 
     // Cleanup
