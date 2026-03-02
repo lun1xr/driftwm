@@ -84,12 +84,13 @@ impl DriftWm {
 
                 let keyboard = self.seat.get_keyboard().unwrap();
                 let mods = keyboard.modifier_state();
+                let alt_held = mods.alt;
                 let mod_held = self.config.mod_key.is_pressed(&mods);
                 let pointer = self.seat.get_pointer().unwrap();
                 let pos = pointer.current_location();
 
-                // Priority 1: Mod held + over window → resize (skip if pinned or no_focus)
-                if mod_held
+                // Priority 1: Alt held + over window → resize (skip if pinned or no_focus)
+                if alt_held
                     && let Some((window, _)) =
                         self.space.element_under(pos).map(|(w, l)| (w.clone(), l))
                     && !driftwm::config::applied_rule(window.toplevel().unwrap().wl_surface())
@@ -114,7 +115,16 @@ impl DriftWm {
                     self.flush_middle_click(pending.press_time, pending.release_time);
                 }
 
-                // Priority 3: Default → pan
+                // Priority 3: Mod held → navigate (same as 4-finger swipe)
+                if mod_held {
+                    self.gesture_state = Some(GestureState::Swipe4Navigate {
+                        cumulative: Point::from((0.0, 0.0)),
+                        fired: false,
+                    });
+                    return;
+                }
+
+                // Priority 4: Default → pan
                 GestureState::Swipe3Pan
             }
             4 => {
@@ -318,8 +328,14 @@ impl DriftWm {
             }
             3 => {
                 self.cancel_animations();
-                GestureState::Pinch3Zoom {
-                    initial_zoom: self.zoom,
+                let keyboard = self.seat.get_keyboard().unwrap();
+                let mods = keyboard.modifier_state();
+                if self.config.mod_key.is_pressed(&mods) {
+                    GestureState::Pinch4Nav { fired: false }
+                } else {
+                    GestureState::Pinch3Zoom {
+                        initial_zoom: self.zoom,
+                    }
                 }
             }
             4 => {
@@ -421,6 +437,14 @@ impl DriftWm {
     pub fn on_gesture_hold_begin<I: InputBackend>(&mut self, event: I::GestureHoldBeginEvent) {
         let fingers = event.fingers();
         let time = Event::time_msec(&event);
+        if fingers == 3 {
+            let keyboard = self.seat.get_keyboard().unwrap();
+            let mods = keyboard.modifier_state();
+            if self.config.mod_key.is_pressed(&mods) {
+                self.gesture_state = Some(GestureState::Hold4);
+                return;
+            }
+        }
         if fingers == 4 {
             self.gesture_state = Some(GestureState::Hold4);
             return;

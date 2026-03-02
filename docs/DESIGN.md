@@ -101,8 +101,12 @@ if the surface under the cursor changes mid-gesture).
 | 2       | pinch        | desktop   | Zoom in/out                        |
 | 3       | scroll       | anywhere  | Pan viewport (ignores windows)     |
 | 3       | dbl-tap+drag | on window | Move window (see below)            |
-| 3+Super | drag         | on window | Resize window                      |
+| 3+Alt   | drag         | on window | Resize window                      |
 | 3       | pinch        | anywhere  | Zoom in/out (ignores windows)      |
+| 3+Mod   | scroll       | anywhere  | Center nearest window in direction |
+| 3+Mod   | pinch in     | anywhere  | Zoom-to-fit (overview)             |
+| 3+Mod   | pinch out    | anywhere  | Toggle home (0,0) ↔ previous       |
+| 3+Mod   | hold (tap)   | anywhere  | Center focused window + reset zoom |
 | 4       | scroll       | anywhere  | Center nearest window in direction |
 | 4       | pinch in     | anywhere  | Zoom-to-fit (overview)             |
 | 4       | pinch out    | anywhere  | Toggle home (0,0) ↔ previous       |
@@ -115,9 +119,13 @@ follows, the click is suppressed and the swipe enters move-window mode. If no
 swipe follows, the click is flushed to the app as a normal middle-click (paste).
 Immediate 3-finger scroll (without a preceding tap) always pans the viewport.
 
-**3-finger+Super resize**: The only trackpad gesture that requires a keyboard
-modifier. Needed for trackpads without right-click drag support. Edges
-inferred from pointer position in the window (same quadrant logic as mouse).
+**3-finger+Alt resize**: Edges inferred from pointer position in the window
+(same quadrant logic as mouse). Uses Alt instead of Mod to avoid conflict with
+Mod+3-finger navigation gestures.
+
+**Mod+3-finger alternatives**: All 4-finger gestures (navigate, overview, home,
+center) are also available as Mod+3-finger for smaller trackpads where 4-finger
+gestures are awkward. The behavior is identical.
 
 **4-finger center**: Searches from cursor in the scroll direction for the
 nearest window (using a viewport-width search band). Centers it, focuses,

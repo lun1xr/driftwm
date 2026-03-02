@@ -18,13 +18,15 @@ coordinates on this plane. You move around with trackpad gestures:
 - **2-finger scroll** on empty desktop — pan viewport
 - **3-finger scroll** anywhere — pan viewport (ignores windows)
 - **3-finger double-tap+drag** on a window — move that window
-- **`Mod` + 3-finger drag** on a window — resize that window
+- **`Alt` + 3-finger drag** on a window — resize that window
 - **2-finger pinch** on empty desktop — zoom
 - **3-finger pinch** anywhere — zoom (ignores windows)
 - **4-finger swipe** — jump to the nearest window in that direction
 - **4-finger pinch in** — toggle overview (zoom-to-fit)
 - **4-finger pinch out** — toggle home position
 - **4-finger hold (tap)** — center focused window + reset zoom
+
+**Small trackpad alternative**: hold `Mod` to use fewer fingers — `Mod`+3-finger replaces 4-finger gestures. Resize uses `Alt`+3-finger.
 
 Mouse: scroll wheel zooms, click-drag pans. `Mod` + click/drag works anywhere.
 `Mod+Ctrl` + drag navigates to nearest window. `Mod` + trackpad scroll pans anywhere.
