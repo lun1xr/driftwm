@@ -355,18 +355,7 @@ impl DriftWm {
         // When pointer is over a layer surface, forward scroll directly (no pan/zoom)
         if self.pointer_over_layer {
             let pointer = self.seat.get_pointer().unwrap();
-            let mut frame = AxisFrame::new(Event::time_msec(&event))
-                .source(event.source());
-            for axis in [Axis::Horizontal, Axis::Vertical] {
-                if let Some(amount) = event.amount(axis) {
-                    frame = frame
-                        .value(axis, amount)
-                        .relative_direction(axis, event.relative_direction(axis));
-                }
-                if let Some(v120) = event.amount_v120(axis) {
-                    frame = frame.v120(axis, v120 as i32);
-                }
-            }
+            let frame = build_client_axis_frame::<I>(&event);
             pointer.axis(self, frame);
             pointer.frame(self);
             return;
@@ -384,18 +373,7 @@ impl DriftWm {
                 // Fall through to zoom logic below
             } else {
                 let pointer = self.seat.get_pointer().unwrap();
-                let mut frame = AxisFrame::new(Event::time_msec(&event))
-                    .source(event.source());
-                for axis in [Axis::Horizontal, Axis::Vertical] {
-                    if let Some(amount) = event.amount(axis) {
-                        frame = frame
-                            .value(axis, amount)
-                            .relative_direction(axis, event.relative_direction(axis));
-                    }
-                    if let Some(v120) = event.amount_v120(axis) {
-                        frame = frame.v120(axis, v120 as i32);
-                    }
-                }
+                let frame = build_client_axis_frame::<I>(&event);
                 pointer.axis(self, frame);
                 pointer.frame(self);
                 return;
@@ -565,20 +543,7 @@ impl DriftWm {
         }
 
         // Over a window without Mod: forward scroll to the client
-        let mut frame = AxisFrame::new(Event::time_msec(&event))
-            .source(event.source());
-
-        for axis in [Axis::Horizontal, Axis::Vertical] {
-            if let Some(amount) = event.amount(axis) {
-                frame = frame
-                    .value(axis, amount)
-                    .relative_direction(axis, event.relative_direction(axis));
-            }
-            if let Some(v120) = event.amount_v120(axis) {
-                frame = frame.v120(axis, v120 as i32);
-            }
-        }
-
+        let frame = build_client_axis_frame::<I>(&event);
         pointer.axis(self, frame);
         pointer.frame(self);
     }
@@ -631,6 +596,25 @@ pub(super) fn edges_from_position(
         (_, _, _, true) => xdg_toplevel::ResizeEdge::Bottom,
         _ => xdg_toplevel::ResizeEdge::BottomRight,
     }
+}
+
+/// Build an `AxisFrame` that faithfully forwards a scroll event to a client,
+/// including `axis_stop` when the user lifts fingers from the trackpad.
+fn build_client_axis_frame<I: InputBackend>(event: &I::PointerAxisEvent) -> AxisFrame {
+    let mut frame = AxisFrame::new(Event::time_msec(event)).source(event.source());
+    for axis in [Axis::Horizontal, Axis::Vertical] {
+        if let Some(amount) = event.amount(axis) {
+            frame = frame
+                .value(axis, amount)
+                .relative_direction(axis, event.relative_direction(axis));
+        } else if event.source() == AxisSource::Finger {
+            frame = frame.stop(axis);
+        }
+        if let Some(v120) = event.amount_v120(axis) {
+            frame = frame.v120(axis, v120 as i32);
+        }
+    }
+    frame
 }
 
 /// Map resize edge to the appropriate directional cursor icon.
