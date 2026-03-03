@@ -5,10 +5,13 @@ use smithay::{
 
 use driftwm::canvas::{self};
 use driftwm::config::Action;
-use crate::state::DriftWm;
+use crate::state::{DriftWm, HomeReturn};
 
 impl DriftWm {
     pub fn execute_action(&mut self, action: &Action) {
+        // Snapshot fullscreen window before the guard exits it
+        let was_fullscreen = self.fullscreen.as_ref().map(|fs| fs.window.clone());
+
         // Any action except ToggleFullscreen exits fullscreen first
         if self.fullscreen.is_some() && !matches!(action, Action::ToggleFullscreen) {
             self.exit_fullscreen();
@@ -221,13 +224,26 @@ impl DriftWm {
 
                 if at_home {
                     // We're at home — return to saved position if we have one
-                    if let Some((target_camera, target_zoom)) = self.home_return.take() {
-                        self.camera_target = Some(target_camera);
-                        self.zoom_target = Some(target_zoom);
+                    if let Some(ret) = self.home_return.take() {
+                        let can_fullscreen = ret.fullscreen_window.as_ref()
+                            .is_some_and(|w| self.space.elements().any(|e| e == w));
+                        if can_fullscreen {
+                            // Set camera/zoom directly — enter_fullscreen locks the viewport
+                            self.camera = ret.camera;
+                            self.zoom = ret.zoom;
+                            self.enter_fullscreen(ret.fullscreen_window.as_ref().unwrap());
+                        } else {
+                            self.camera_target = Some(ret.camera);
+                            self.zoom_target = Some(ret.zoom);
+                        }
                     }
                 } else {
                     // Not at home — save current position+zoom and go home at zoom=1.0
-                    self.home_return = Some((self.camera, self.zoom));
+                    self.home_return = Some(HomeReturn {
+                        camera: self.camera,
+                        zoom: self.zoom,
+                        fullscreen_window: was_fullscreen,
+                    });
                     self.overview_return = None;
                     let home = Point::from((
                         -(viewport_size.w as f64) / 2.0,

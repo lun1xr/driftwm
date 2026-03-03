@@ -127,6 +127,13 @@ pub struct CalloopData {
     pub display: Display<DriftWm>,
 }
 
+/// Saved viewport state for HomeToggle return — includes optional fullscreen window.
+pub struct HomeReturn {
+    pub camera: Point<f64, Logical>,
+    pub zoom: f64,
+    pub fullscreen_window: Option<Window>,
+}
+
 /// Saved state for a fullscreen window — restored on exit.
 pub struct FullscreenState {
     pub window: Window,
@@ -267,8 +274,8 @@ pub struct DriftWm {
     pub focus_history: Vec<Window>,
     /// Active Alt-Tab cycling index into focus_history. None when not cycling.
     pub cycle_state: Option<usize>,
-    /// Saved (camera, zoom) to return to when toggling home a second time.
-    pub home_return: Option<(Point<f64, Logical>, f64)>,
+    /// Saved viewport state to return to when toggling home a second time.
+    pub home_return: Option<HomeReturn>,
 
     // Key repeat for compositor bindings (smithay's repeat only applies to
     // client-forwarded keys, not intercepted compositor actions).
@@ -612,10 +619,11 @@ impl DriftWm {
         let tmp = dir.join("state.tmp");
         let mut content = format!("x={cx:.0}\ny={cy:.0}\nzoom={z:.3}\nlayout={}\n", self.active_layout);
 
-        if let Some((saved_cam, saved_zoom)) = self.home_return {
-            let sx = saved_cam.x + vp.w as f64 / (2.0 * saved_zoom);
-            let sy = -(saved_cam.y + vp.h as f64 / (2.0 * saved_zoom));
-            content += &format!("saved_x={sx:.0}\nsaved_y={sy:.0}\nsaved_zoom={saved_zoom:.3}\n");
+        if let Some(ref ret) = self.home_return {
+            let sz = ret.zoom;
+            let sx = ret.camera.x + vp.w as f64 / (2.0 * sz);
+            let sy = -(ret.camera.y + vp.h as f64 / (2.0 * sz));
+            content += &format!("saved_x={sx:.0}\nsaved_y={sy:.0}\nsaved_zoom={sz:.3}\n");
         }
 
         // Window list: app_id of each toplevel (focused window first)

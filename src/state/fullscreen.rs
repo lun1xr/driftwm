@@ -37,7 +37,6 @@ impl DriftWm {
         self.camera_target = None;
         self.momentum.stop();
         self.overview_return = None;
-        self.home_return = None;
         // Top/Bottom layers are hidden during fullscreen — reset stale pointer state
         self.pointer_over_layer = false;
 

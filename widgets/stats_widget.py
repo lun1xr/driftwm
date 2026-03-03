@@ -42,7 +42,7 @@ click_map: dict[int, list[str]] = {}
 # Click actions per section
 ACTION_CPU = ["gnome-system-monitor"]
 ACTION_RAM = ["gnome-system-monitor"]
-ACTION_VOL = ["swayosd-client", "--output-volume", "mute-toggle"]
+ACTION_VOL = ["pavucontrol"]
 ACTION_WIFI = ["alacritty", "-e", "nmtui"]
 ACTION_BT = ["blueman-manager"]
 

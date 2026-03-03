@@ -195,7 +195,7 @@ Minimal set. Defaults below, all configurable via `[keybinds]` table (maps key c
 | `Super+Arrow` | Center nearest window in direction |
 | `Super+A`     | Toggle home (0, 0) ↔ previous pos  |
 | `Super+W`     | Zoom-to-fit — show all windows     |
-| `Super+1-4`   | Go to canvas corner bookmark       |
+| `Super+1-4`   | Go to canvas corner (↙ ↖ ↗ ↘)     |
 
 ### Viewport
 
