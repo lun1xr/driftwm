@@ -139,6 +139,12 @@ impl DriftWm {
                 }
             }
             Action::CenterNearest(dir) => {
+                #[derive(Clone, PartialEq)]
+                enum NavTarget {
+                    Window(smithay::desktop::Window),
+                    Anchor(Point<f64, smithay::utils::Logical>),
+                }
+
                 let keyboard = self.seat.get_keyboard().unwrap();
                 let focused = keyboard.current_focus().and_then(|focus| {
                     self.space
@@ -166,7 +172,7 @@ impl DriftWm {
                             loc.x as f64 + size.w as f64 / 2.0,
                             loc.y as f64 + size.h as f64 / 2.0,
                         ));
-                        (center, focused.clone())
+                        (center, Some(NavTarget::Window(w.clone())))
                     } else {
                         (viewport_center, None)
                     }
@@ -181,17 +187,39 @@ impl DriftWm {
                     let loc = self.space.element_location(w).unwrap_or_default();
                     let size = w.geometry().size;
                     let closest = canvas::closest_point_on_rect(origin, loc, size);
-                    (w.clone(), closest)
-                }).collect::<Vec<_>>();
+                    let point = if closest == origin {
+                        Point::from((
+                            loc.x as f64 + size.w as f64 / 2.0,
+                            loc.y as f64 + size.h as f64 / 2.0,
+                        ))
+                    } else {
+                        closest
+                    };
+                    (NavTarget::Window(w.clone()), point)
+                });
+
+                let anchors = self.config.nav_anchors.iter()
+                    .map(|&p| (NavTarget::Anchor(p), p));
 
                 let nearest = canvas::find_nearest(
                     origin,
                     dir,
-                    windows.into_iter(),
+                    windows.chain(anchors),
                     skip.as_ref(),
                 );
-                if let Some(window) = nearest {
-                    self.navigate_to_window(&window, false);
+                match nearest {
+                    Some(NavTarget::Window(w)) => {
+                        self.navigate_to_window(&w, false);
+                    }
+                    Some(NavTarget::Anchor(p)) => {
+                        self.momentum.stop();
+                        let vp = self.get_viewport_size();
+                        self.camera_target = Some(Point::from((
+                            p.x - vp.w as f64 / (2.0 * self.zoom),
+                            p.y - vp.h as f64 / (2.0 * self.zoom),
+                        )));
+                    }
+                    None => {}
                 }
             }
             Action::CycleWindows { backward } => {

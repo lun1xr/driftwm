@@ -10,6 +10,7 @@ pub use types::*;
 use std::collections::HashMap;
 
 use smithay::input::keyboard::{Keysym, ModifiersState};
+use smithay::utils::{Logical, Point};
 
 use defaults::{default_bindings, default_mouse_bindings};
 use toml::{ConfigFile, DecorationFileConfig, WindowRuleFile, expand_tilde};
@@ -54,6 +55,7 @@ pub struct Config {
     pub cursor_theme: Option<String>,
     pub cursor_size: Option<u32>,
     pub decorations: DecorationConfig,
+    pub nav_anchors: Vec<Point<f64, Logical>>,
     pub window_rules: Vec<WindowRule>,
     bindings: HashMap<KeyCombo, Action>,
     pub mouse_bindings: HashMap<MouseBinding, MouseAction>,
@@ -267,6 +269,11 @@ impl Config {
             keyboard_layout,
             cursor_theme: raw.cursor.theme,
             cursor_size: raw.cursor.size,
+            nav_anchors: raw.navigation.anchors
+                .unwrap_or_else(|| vec![[0.0, 0.0]])
+                .into_iter()
+                .map(|[x, y]| Point::from((x, -y)))
+                .collect(),
             autostart: raw.autostart.unwrap_or_default(),
             window_rules,
             bindings,

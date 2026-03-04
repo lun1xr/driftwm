@@ -70,6 +70,7 @@ pub(super) struct NavigationConfig {
     pub animation_speed: Option<f64>,
     pub nudge_step: Option<i32>,
     pub pan_step: Option<f64>,
+    pub anchors: Option<Vec<[f64; 2]>>,
     pub edge_pan: EdgePanConfig,
 }
 

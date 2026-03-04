@@ -39,6 +39,10 @@
 # animation_speed = 0.3       # camera lerp factor (higher = faster)
 # nudge_step = 20             # px per nudge-window action
 # pan_step = 100.0            # px per pan-viewport action
+# Canvas points reachable via directional navigation (Mod+Arrow).
+# Uses same coordinate system as go_to_position (Y-up).
+# Default: [[0, 0]] (home).
+# anchors = [[0, 0], [-1500, -1500]]
 
 [navigation.edge_pan]
 # zone = 100.0                # activation zone width (px from viewport edge)
