@@ -207,6 +207,7 @@ impl DriftWm {
         &mut self,
         event: I::PointerMotionAbsoluteEvent,
     ) {
+        // single-output assumption: uses first output for coordinate transform
         let output = match self.space.outputs().next() {
             Some(o) => o.clone(),
             None => return,
@@ -313,7 +314,7 @@ impl DriftWm {
             (delta.x / self.zoom, delta.y / self.zoom).into();
         let canvas_pos = old_canvas + canvas_delta;
 
-        // Clamp to output bounds in screen space so cursor can't escape
+        // single-output assumption: clamps to first output bounds
         let output = match self.space.outputs().next() {
             Some(o) => o.clone(),
             None => return,
@@ -573,6 +574,7 @@ impl DriftWm {
         canvas_pos: Point<f64, smithay::utils::Logical>,
         layers: &[WlrLayer],
     ) -> Option<(FocusTarget, Point<f64, smithay::utils::Logical>)> {
+        // single-output assumption: checks layers on first output only
         let output = self.space.outputs().next()?;
         let map = layer_map_for_output(output);
         for &layer in layers {

@@ -35,6 +35,7 @@ impl XdgShellHandler for DriftWm {
 
         // Place at screen center (no size offset — size unknown until first commit).
         // The pending_center set will trigger proper centering once size is known.
+        // single-output assumption: centers window on first output
         let pos = self
             .space
             .outputs()
@@ -359,6 +360,7 @@ impl DriftWm {
             target
         } else {
             // Parent is a layer surface — find it in the layer map
+            // single-output assumption: uses first output for layer lookup
             let output = self.space.outputs().next().cloned();
             let output = match output {
                 Some(o) => o,

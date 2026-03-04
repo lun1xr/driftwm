@@ -170,6 +170,7 @@ impl CompositorHandler for DriftWm {
                         {
                             (x - geo.size.w / 2, -y - geo.size.h / 2)
                         } else {
+                            // single-output assumption: centers on first output
                             let output_geo = {
                                 let output = self.space.outputs().next().cloned();
                                 output.and_then(|o| self.space.output_geometry(&o))

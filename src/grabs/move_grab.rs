@@ -166,6 +166,7 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
         handle.motion(data, None, event);
 
         // Edge auto-pan detection
+        // single-output assumption: edge detection uses first output size
         let screen_pos = canvas_to_screen(CanvasPos(event.location), data.camera, data.zoom).0;
         let output_size = data.space.outputs().next()
             .and_then(|o| o.current_mode())

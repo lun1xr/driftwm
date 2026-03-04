@@ -371,7 +371,10 @@ pub fn compose_frame(
         init_background(state, renderer, output_size);
     }
 
-    let viewport_size = state.get_viewport_size();
+    let viewport_size = output
+        .current_mode()
+        .map(|m| m.size.to_logical(1))
+        .unwrap_or((1, 1).into());
     let visible_rect = canvas::visible_canvas_rect(
         state.camera.to_i32_round(),
         viewport_size,

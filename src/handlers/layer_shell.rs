@@ -63,6 +63,7 @@ impl WlrLayerShellHandler for DriftWm {
                 })
             })
             .cloned()
+            // single-output assumption: falls back to first output
             .or_else(|| self.space.outputs().next().cloned());
 
         let Some(resolved_output) = resolved_output else {

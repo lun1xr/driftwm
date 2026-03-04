@@ -52,22 +52,6 @@ pub fn camera_to_center_window(
     ))
 }
 
-/// Is any part of a rectangle visible in the current viewport?
-pub fn is_rect_visible(
-    rect_loc: Point<i32, Logical>,
-    rect_size: Size<i32, Logical>,
-    camera: Point<f64, Logical>,
-    viewport_size: Size<i32, Logical>,
-    zoom: f64,
-) -> bool {
-    let vw = viewport_size.w as f64 / zoom;
-    let vh = viewport_size.h as f64 / zoom;
-    (rect_loc.x as f64) < camera.x + vw
-        && (rect_loc.x + rect_size.w) as f64 > camera.x
-        && (rect_loc.y as f64) < camera.y + vh
-        && (rect_loc.y + rect_size.h) as f64 > camera.y
-}
-
 /// Fraction of a rectangle's area visible in the current viewport (0.0–1.0).
 /// Returns 0.0 for zero-area rectangles.
 pub fn visible_fraction(
@@ -358,5 +342,151 @@ mod tests {
         // Same window at zoom 1.0 is fully off-screen.
         let f = visible_fraction((1500, 0).into(), (100, 100).into(), cam(0.0, 0.0), vp(1000, 1000), 1.0);
         assert!((f - 0.0).abs() < 1e-9);
+    }
+
+    // -- Coordinate transform round-trip tests --
+
+    #[test]
+    fn screen_canvas_round_trip_zoom_1() {
+        let camera = cam(100.0, 200.0);
+        let original = ScreenPos(Point::from((400.0, 300.0)));
+        let canvas = screen_to_canvas(original, camera, 1.0);
+        let back = canvas_to_screen(canvas, camera, 1.0);
+        assert!((back.0.x - original.0.x).abs() < 1e-9);
+        assert!((back.0.y - original.0.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn screen_canvas_round_trip_zoomed_out() {
+        let camera = cam(-500.0, -300.0);
+        let zoom = 0.25;
+        let original = ScreenPos(Point::from((640.0, 480.0)));
+        let canvas = screen_to_canvas(original, camera, zoom);
+        let back = canvas_to_screen(canvas, camera, zoom);
+        assert!((back.0.x - original.0.x).abs() < 1e-9);
+        assert!((back.0.y - original.0.y).abs() < 1e-9);
+    }
+
+    #[test]
+    fn screen_to_canvas_math() {
+        // screen = (canvas - camera) * zoom  ⟹  canvas = screen / zoom + camera
+        let canvas = screen_to_canvas(ScreenPos(Point::from((100.0, 50.0))), cam(10.0, 20.0), 0.5);
+        // 100/0.5 + 10 = 210, 50/0.5 + 20 = 120
+        assert!((canvas.0.x - 210.0).abs() < 1e-9);
+        assert!((canvas.0.y - 120.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn canvas_to_screen_math() {
+        // screen = (canvas - camera) * zoom
+        let screen = canvas_to_screen(CanvasPos(Point::from((210.0, 120.0))), cam(10.0, 20.0), 0.5);
+        // (210 - 10) * 0.5 = 100, (120 - 20) * 0.5 = 50
+        assert!((screen.0.x - 100.0).abs() < 1e-9);
+        assert!((screen.0.y - 50.0).abs() < 1e-9);
+    }
+
+    // -- camera_to_center_window tests --
+
+    #[test]
+    fn center_window_zoom_1() {
+        // 200x100 window at (300, 400), 1920x1080 viewport, zoom 1.0
+        let cam = camera_to_center_window(
+            (300, 400).into(), (200, 100).into(), vp(1920, 1080), 1.0,
+        );
+        // window center: (400, 450), viewport center offset: (960, 540)
+        assert!((cam.x - (400.0 - 960.0)).abs() < 1e-9);
+        assert!((cam.y - (450.0 - 540.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn center_window_zoomed_out() {
+        // At zoom 0.5, viewport center = viewport_size / (2 * 0.5) = viewport_size
+        let cam = camera_to_center_window(
+            (0, 0).into(), (100, 100).into(), vp(1000, 1000), 0.5,
+        );
+        // window center: (50, 50), viewport center offset at 0.5: (1000, 1000)
+        assert!((cam.x - (50.0 - 1000.0)).abs() < 1e-9);
+        assert!((cam.y - (50.0 - 1000.0)).abs() < 1e-9);
+    }
+
+    // -- find_nearest tests --
+
+    fn pt(x: f64, y: f64) -> Point<f64, Logical> {
+        Point::from((x, y))
+    }
+
+    #[test]
+    fn find_nearest_right() {
+        let origin = pt(0.0, 0.0);
+        let items = vec![
+            ("a", pt(100.0, 0.0)),   // directly right
+            ("b", pt(-100.0, 0.0)),  // directly left
+            ("c", pt(200.0, 0.0)),   // further right
+        ];
+        let result = find_nearest(origin, &Direction::Right, items.into_iter(), None::<&&str>);
+        assert_eq!(result, Some("a"));
+    }
+
+    #[test]
+    fn find_nearest_up() {
+        let origin = pt(0.0, 0.0);
+        let items = vec![
+            ("above", pt(0.0, -100.0)),
+            ("below", pt(0.0, 100.0)),
+        ];
+        let result = find_nearest(origin, &Direction::Up, items.into_iter(), None::<&&str>);
+        assert_eq!(result, Some("above"));
+    }
+
+    #[test]
+    fn find_nearest_down() {
+        let origin = pt(0.0, 0.0);
+        let items = vec![
+            ("above", pt(0.0, -100.0)),
+            ("below", pt(0.0, 100.0)),
+        ];
+        let result = find_nearest(origin, &Direction::Down, items.into_iter(), None::<&&str>);
+        assert_eq!(result, Some("below"));
+    }
+
+    #[test]
+    fn find_nearest_left() {
+        let origin = pt(0.0, 0.0);
+        let items = vec![
+            ("left", pt(-100.0, 0.0)),
+            ("right", pt(100.0, 0.0)),
+        ];
+        let result = find_nearest(origin, &Direction::Left, items.into_iter(), None::<&&str>);
+        assert_eq!(result, Some("left"));
+    }
+
+    #[test]
+    fn find_nearest_outside_cone() {
+        // Item at 60° from the right axis — outside the 45° cone
+        let origin = pt(0.0, 0.0);
+        let items = vec![
+            ("diagonal", pt(50.0, 100.0)),
+        ];
+        let result = find_nearest(origin, &Direction::Right, items.into_iter(), None::<&&str>);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn find_nearest_skips_self() {
+        let origin = pt(0.0, 0.0);
+        let items = vec![
+            ("self", pt(10.0, 0.0)),
+            ("other", pt(20.0, 0.0)),
+        ];
+        let result = find_nearest(origin, &Direction::Right, items.into_iter(), Some(&"self"));
+        assert_eq!(result, Some("other"));
+    }
+
+    #[test]
+    fn find_nearest_empty() {
+        let origin = pt(0.0, 0.0);
+        let items: Vec<(&str, Point<f64, Logical>)> = vec![];
+        let result = find_nearest(origin, &Direction::Right, items.into_iter(), None::<&&str>);
+        assert_eq!(result, None);
     }
 }

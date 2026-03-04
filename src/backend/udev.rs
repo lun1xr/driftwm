@@ -286,6 +286,7 @@ pub fn init_udev(
     }
 
     // 7. Compile background shader / load tile (shared with winit)
+    // single-output assumption: uses first surface's mode for initial background size
     let initial_size = device_surfaces
         .values()
         .next()
@@ -607,6 +608,7 @@ fn create_surface(
         }
     };
 
+    // single-output assumption: sets initial camera from first output only
     if state.space.outputs().next().is_none() {
         let logical_size = output_mode.size.to_logical(1);
         state.camera = smithay::utils::Point::from((

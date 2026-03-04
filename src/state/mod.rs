@@ -145,16 +145,17 @@ pub struct FullscreenState {
 
 /// Central compositor state.
 pub struct DriftWm {
+    // -- global: infrastructure --
     pub start_time: Instant,
     pub display_handle: DisplayHandle,
     pub loop_handle: LoopHandle<'static, CalloopData>,
     pub loop_signal: LoopSignal,
 
-    // Desktop
+    // -- global: desktop --
     pub space: Space<Window>,
     pub popups: PopupManager,
 
-    // Protocol state
+    // -- global: protocol state --
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
     pub shm_state: ShmState,
@@ -163,69 +164,49 @@ pub struct DriftWm {
     pub seat_state: SeatState<DriftWm>,
     pub data_device_state: DataDeviceState,
 
-    // Input
+    // -- global: input --
     pub seat: Seat<DriftWm>,
 
-    // Viewport / camera / zoom
+    // -- per-output: viewport / camera / zoom --
     pub camera: Point<f64, Logical>,
     pub zoom: f64,
-    /// Zoom animation target. When Some, zoom lerps toward this value each frame.
     pub zoom_target: Option<f64>,
-    /// Desired canvas center during combined camera+zoom animations.
-    /// When set, `camera_target` is recomputed each frame from this center
-    /// and the current (interpolating) zoom, preventing lateral drift.
     pub zoom_animation_center: Option<Point<f64, Logical>>,
-    /// Last rendered zoom — for shader/damage change detection.
     pub last_rendered_zoom: f64,
-    /// Saved (camera, zoom) for ZoomToFit toggle-back.
     pub overview_return: Option<(Point<f64, Logical>, f64)>,
-    /// Timestamp of the last scroll-pan event. Used to keep panning sticky
-    /// within a scroll gesture (150ms window) even if a window slides under.
+    // -- per-output: scroll/momentum --
     pub last_scroll_pan: Option<Instant>,
-    /// Scroll momentum: velocity, friction, frame-based skip.
     pub momentum: MomentumState,
-    /// Monotonic frame counter, incremented each render tick.
+    // -- per-output: frame timing --
     pub frame_counter: u64,
-    /// True while a PanGrab is active. Suppresses momentum ticks so
-    /// they don't interfere with the grab's camera tracking.
+    // -- per-output: pan state --
     pub panning: bool,
-
-    /// Auto-pan velocity when dragging a window to viewport edge.
-    /// Set by MoveSurfaceGrab, cleared when grab ends or cursor leaves edge zone.
     pub edge_pan_velocity: Option<Point<f64, Logical>>,
 
-    // Cursor
+    // -- global: cursor --
     pub cursor_status: CursorImageStatus,
     /// True while a compositor grab (pan/resize) owns the cursor icon.
-    /// Blocks client cursor updates in `cursor_image()`.
     pub grab_cursor: bool,
-    /// True while the pointer is over an SSD decoration area (title bar, close button, resize border).
-    /// Blocks client cursor updates so the decoration cursor persists.
+    /// True while the pointer is over an SSD decoration area.
     pub decoration_cursor: bool,
     pub cursor_buffers: HashMap<String, CursorFrames>,
 
-    // Backend (moved here so protocol handlers can access the renderer)
+    // -- global: backend --
     pub backend: Option<Backend>,
-    /// Per-window SSD decoration state, keyed by wl_surface ObjectId.
+    // -- global: SSD decorations --
     pub decorations: HashMap<smithay::reexports::wayland_server::backend::ObjectId, crate::decorations::WindowDecoration>,
-    /// Surfaces that should get SSD (from protocol negotiation or window rules).
-    /// Checked at first commit to create WindowDecoration once size is known.
     pub pending_ssd: HashSet<smithay::reexports::wayland_server::backend::ObjectId>,
-    /// Compiled shadow shader for SSD decorations.
+    // -- global: shaders (compiled once, shared across outputs) --
     pub shadow_shader: Option<GlesPixelProgram>,
-
-    /// Compiled background shader program (compiled once at startup).
     pub background_shader: Option<GlesPixelProgram>,
-    /// Cached shader background element (stable Id for damage tracking).
+    // -- per-output: cached render elements --
     pub cached_bg_element: Option<PixelShaderElement>,
-    /// Camera position at last render — used to detect movement and update uniforms.
+    // -- per-output: last-rendered state for damage detection --
     pub last_rendered_camera: Point<f64, Logical>,
-    /// Pre-loaded tile image for tiled background (loaded once at startup).
-    /// Buffer is (w+1)×(h+1) with the last col/row duplicated for 1px overlap.
-    /// Stores (buffer, original_width, original_height).
+    // -- global: background tile (loaded once, shared) --
     pub background_tile: Option<(MemoryRenderBuffer, i32, i32)>,
 
-    // Protocols (fields held for smithay delegate macros — reads happen inside generated code)
+    // -- global: protocol state (held for smithay delegate macros) --
     pub dmabuf_state: DmabufState,
     pub dmabuf_global: Option<DmabufGlobal>,
     #[allow(dead_code)]
@@ -255,77 +236,62 @@ pub struct DriftWm {
     pub pending_screencopies: Vec<driftwm::protocols::screencopy::Screencopy>,
     pub session_lock_manager_state: SessionLockManagerState,
     pub session_lock: SessionLock,
+    // -- per-output: lock surface (one per output in multi-monitor) --
     pub lock_surface: Option<LockSurface>,
 
-    /// True when pointer focus is a layer surface (screen-fixed, not canvas-relative).
-    /// Guards synthetic pointer adjustments in camera/zoom animations.
+    // -- global: pointer/layer state --
     pub pointer_over_layer: bool,
-
-    /// Layer surfaces placed at canvas coordinates (matched by window rules with position).
     pub canvas_layers: Vec<CanvasLayer>,
 
-    // Keybindings and settings
+    // -- global: config --
     pub config: Config,
 
-    /// Surfaces awaiting their first buffer commit, to be centered once size is known.
+    // -- global: window management --
     pub pending_center: HashSet<WlSurface>,
 
-    // Window navigation
-    /// Camera animation target. When Some, camera lerps toward this point each frame.
+    // -- per-output: camera animation --
     pub camera_target: Option<Point<f64, Logical>>,
-    /// Timestamp of the last rendered frame, for delta-time computation.
+    // -- per-output: frame timing --
     pub last_frame_instant: Instant,
-    /// MRU focus history: index 0 = most recently focused.
+    // -- global: focus/navigation --
     pub focus_history: Vec<Window>,
-    /// Active Alt-Tab cycling index into focus_history. None when not cycling.
     pub cycle_state: Option<usize>,
-    /// Saved viewport state to return to when toggling home a second time.
     pub home_return: Option<HomeReturn>,
 
-    // Key repeat for compositor bindings (smithay's repeat only applies to
-    // client-forwarded keys, not intercepted compositor actions).
-    /// Currently held repeatable action: (keycode, action, next_fire_time).
+    // -- global: key repeat --
     pub held_action: Option<(u32, driftwm::config::Action, Instant)>,
 
-    /// Active fullscreen window state. When Some, viewport is locked.
+    // -- per-output: fullscreen --
     pub fullscreen: Option<FullscreenState>,
 
-    /// Active gesture state. Set at Begin, cleared at End/Cancel.
+    // -- global: gesture state --
     pub gesture_state: Option<GestureState>,
-
-    /// Buffered middle-click waiting for a possible 3-finger swipe.
     pub pending_middle_click: Option<PendingMiddleClick>,
 
-    /// Libseat session for VT switching (udev backend only).
+    // -- global: session --
     pub session: Option<LibSeatSession>,
 
-    /// Last camera/zoom written to the state file (for dirty detection).
+    // -- global: state file persistence --
     pub state_file_camera: Point<f64, Logical>,
     pub state_file_zoom: f64,
-    /// Throttle: last time the state file was actually written.
     pub state_file_last_write: Instant,
-
     /// Active XKB layout name (e.g. "English (US)"), updated on key events.
     pub active_layout: String,
-    /// Last layout written to the state file (for dirty detection).
     pub state_file_layout: String,
 
-    /// Commands to spawn after WAYLAND_DISPLAY is set.
+    // -- global: autostart --
     pub autostart: Vec<String>,
 
-    /// Active DRM CRTCs (set by udev backend init/hotplug).
+    // -- global: udev/DRM --
     pub active_crtcs: HashSet<crtc::Handle>,
-    /// CRTCs that need a new frame rendered.
     pub redraws_needed: HashSet<crtc::Handle>,
-    /// CRTCs with a frame queued to DRM, awaiting VBlank.
     pub frames_pending: HashSet<crtc::Handle>,
 
-    /// Grace period before showing loading cursor (avoids flash for fast-launching apps).
+    // -- global: loading cursor --
     pub exec_cursor_show_at: Option<Instant>,
-    /// Deadline for loading cursor (shown after Exec until new window commits or timeout).
     pub exec_cursor_deadline: Option<Instant>,
 
-    /// Config file mtime — for polling-based hot-reload.
+    // -- global: config hot-reload --
     pub config_file_mtime: Option<std::time::SystemTime>,
 }
 
@@ -572,6 +538,7 @@ impl DriftWm {
 
     /// Sync each output's position to the current camera, so render_output
     /// automatically applies the canvas→screen transform.
+    /// single-output assumption: applies the same global camera to all outputs.
     pub fn update_output_from_camera(&mut self) {
         let camera_i32 = self.camera.to_i32_round();
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
@@ -580,6 +547,7 @@ impl DriftWm {
     }
 
     /// Logical viewport size from the first output.
+    /// single-output assumption: returns size of the first output only.
     pub fn get_viewport_size(&self) -> Size<i32, Logical> {
         self.space
             .outputs()
