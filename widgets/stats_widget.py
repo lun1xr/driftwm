@@ -9,8 +9,10 @@ from collections import deque
 
 from common import (
     ICON,
+    TUNED_ICON,
     battery_icon,
     brightness_icon,
+    cycle_tuned_profile,
     disable_mouse,
     enable_mouse,
     get_battery,
@@ -18,6 +20,7 @@ from common import (
     get_brightness,
     get_cpu_percent,
     get_ram,
+    get_tuned_profile,
     get_volume,
     get_wifi,
     poll_click,
@@ -36,8 +39,9 @@ console = Console(width=WIDTH, highlight=False)
 cpu_history: deque[float] = deque(maxlen=10)
 ram_history: deque[float] = deque(maxlen=10)
 
-# Maps terminal row (1-based) → shell command. Built each render().
-click_map: dict[int, list[str]] = {}
+# Maps terminal row (1-based) → action. Built each render().
+# Actions: list[str] = spawn command, str = special action, tuple = bar handler
+click_map: dict[int, list[str] | str | tuple] = {}
 
 # Click actions per section
 ACTION_CPU = ["gnome-system-monitor"]
@@ -45,6 +49,37 @@ ACTION_RAM = ["gnome-system-monitor"]
 ACTION_VOL = ["pavucontrol"]
 ACTION_WIFI = ["alacritty", "-e", "nmtui"]
 ACTION_BT = ["blueman-manager"]
+
+# Bar geometry: 3 spaces + icon(2) + 2 spaces + PAD(15) = column 22, width 10
+BAR_X_START = 22
+BAR_WIDTH = 10
+
+
+def _bar_pct_from_x(x: int) -> int | None:
+    """Convert terminal x coordinate to 0-100 percentage, or None if outside bar."""
+    if x < BAR_X_START or x >= BAR_X_START + BAR_WIDTH:
+        return None
+    return min(round((x - BAR_X_START + 1) / BAR_WIDTH * 100), 100)
+
+
+def _set_volume(pct: int) -> None:
+    current, _ = get_volume()
+    delta = pct - current
+    if delta == 0:
+        return
+    subprocess.Popen(
+        ["swayosd-client", "--output-volume", f"{delta:+d}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _set_brightness(pct: int) -> None:
+    subprocess.Popen(
+        ["swayosd-client", "--brightness", str(pct)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def load_color(pct: float) -> str:
@@ -84,6 +119,9 @@ def _render_cpu_ram(text: Text, line: int) -> int:
     return line + 1
 
 
+ACTION_BAT_CYCLE = "tuned-cycle"
+
+
 def _render_battery(text: Text, line: int) -> int:
     bat = get_battery()
     if not bat:
@@ -91,10 +129,17 @@ def _render_battery(text: Text, line: int) -> int:
     pct, status, _time_rem = bat
     icon = battery_icon(pct, status)
     color = bat_color(pct)
+    profile = get_tuned_profile()
+    tag = TUNED_ICON.get(profile, "?")
     text.append(f"   {icon}  ", style=color)
-    info = f"bat  {pct:3d}%"
-    text.append(f"{info:<{PAD}}")
+    text.append(f"bat  {pct:3d}%")
+    if tag:
+        text.append(f"   {tag}", style=color)
+        text.append(f"{'':>{PAD - 9 - 4}}")
+    else:
+        text.append(f"{'':>{PAD - 9}}")
     text.append(f"{progress_bar(pct)}\n", style=color)
+    click_map[line] = ACTION_BAT_CYCLE
     return line + 1
 
 
@@ -111,7 +156,7 @@ def _render_volume(text: Text, line: int) -> int:
         info = f"vol  {vol:3d}%"
         text.append(f"{info:<{PAD}}")
         text.append(f"{progress_bar(vol)}\n", style="blue")
-    click_map[line] = ACTION_VOL
+    click_map[line] = ("vol_bar", _set_volume, ACTION_VOL)
     return line + 1
 
 
@@ -124,6 +169,7 @@ def _render_brightness(text: Text, line: int) -> int:
     info = f"bri  {bri:3d}%"
     text.append(f"{info:<{PAD}}")
     text.append(f"{progress_bar(bri)}\n", style="yellow")
+    click_map[line] = ("bar", _set_brightness, None)
     return line + 1
 
 
@@ -181,12 +227,32 @@ try:
             live.update(render())
             click = poll_click(1.0)
             if click is not None:
-                _, y = click
-                cmd = click_map.get(y)
-                if cmd:
+                x, y = click
+                action = click_map.get(y)
+                if action == ACTION_BAT_CYCLE:
+                    cycle_tuned_profile()
+                elif isinstance(action, tuple):
+                    kind, setter, fallback = action
+                    pct = _bar_pct_from_x(x)
+                    if pct is not None:
+                        setter(pct)
+                    elif kind == "vol_bar" and x <= 7:
+                        subprocess.Popen(
+                            ["swayosd-client", "--output-volume", "mute-toggle"],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                    elif fallback:
+                        with contextlib.suppress(OSError):
+                            subprocess.Popen(
+                                fallback,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                elif action:
                     with contextlib.suppress(OSError):
                         subprocess.Popen(
-                            cmd,
+                            action,
                             stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL,
                         )

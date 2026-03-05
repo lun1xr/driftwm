@@ -415,6 +415,49 @@ def environ_get(key: str, default: str) -> str:
     return os.environ.get(key, default)
 
 
+def get_tuned_profile() -> str:
+    """Returns the active tuned profile name, e.g. 'balanced'."""
+    try:
+        result = subprocess.run(
+            ["tuned-adm", "active"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+        # Output: "Current active profile: balanced"
+        for line in result.stdout.splitlines():
+            if ":" in line:
+                return line.split(":", 1)[1].strip()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+    return "unknown"
+
+
+TUNED_PROFILES = ["powersave", "balanced", "latency-performance"]
+
+TUNED_ICON = {
+    "powersave": "\U000f032a",  # 󰌪 nf-md-leaf
+    "balanced": "",  # no icon for default mode
+    "latency-performance": "\U000f04c5",  # 󰓅 nf-md-speedometer
+}
+
+
+def cycle_tuned_profile() -> None:
+    """Cycle to the next tuned profile in TUNED_PROFILES."""
+    current = get_tuned_profile()
+    try:
+        idx = TUNED_PROFILES.index(current)
+        next_profile = TUNED_PROFILES[(idx + 1) % len(TUNED_PROFILES)]
+    except ValueError:
+        next_profile = TUNED_PROFILES[0]
+    subprocess.Popen(
+        ["tuned-adm", "profile", next_profile],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def get_brightness() -> int | None:
     """Returns screen brightness percent or None if unavailable."""
     try:
