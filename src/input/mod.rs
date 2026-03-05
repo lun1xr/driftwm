@@ -319,10 +319,7 @@ impl DriftWm {
             (os.camera, os.zoom, os.layout_position)
         };
 
-        let output_size = cur_output
-            .current_mode()
-            .map(|m| m.size.to_logical(1))
-            .unwrap_or((1, 1).into());
+        let output_size = crate::state::output_logical_size(&cur_output);
 
         // Convert old canvas pos to screen pos, add layout_position → old layout pos
         let old_screen = driftwm::canvas::canvas_to_screen(

@@ -98,7 +98,7 @@ pub fn build_tile_background_elements(
     let scale = output.current_scale().integer_scale();
     let output_size = output
         .current_mode()
-        .map(|m| m.size.to_logical(scale))
+        .map(|m| output.current_transform().transform_size(m.size.to_logical(scale)))
         .unwrap_or((1, 1).into());
 
     let Some((tile_buf, tw, th)) = &state.background_tile else {
@@ -319,7 +319,7 @@ pub fn update_background_element(
         let scale = output.current_scale().integer_scale();
         let output_size = output
             .current_mode()
-            .map(|m| m.size.to_logical(scale))
+            .map(|m| output.current_transform().transform_size(m.size.to_logical(scale)))
             .unwrap_or((1, 1).into());
         let canvas_w = (output_size.w as f64 / cur_zoom).ceil() as i32;
         let canvas_h = (output_size.h as f64 / cur_zoom).ceil() as i32;
@@ -378,7 +378,9 @@ pub fn compose_frame(
     if !state.cached_bg_elements.contains_key(&output.name()) && state.background_tile.is_none() {
         let output_size = output
             .current_mode()
-            .map(|m| m.size.to_logical(output.current_scale().integer_scale()))
+            .map(|m| output.current_transform().transform_size(
+                m.size.to_logical(output.current_scale().integer_scale()),
+            ))
             .unwrap_or((1, 1).into());
         init_background(state, renderer, output_size, &output.name());
     }
@@ -389,10 +391,7 @@ pub fn compose_frame(
         (os.camera, os.zoom)
     };
 
-    let viewport_size = output
-        .current_mode()
-        .map(|m| m.size.to_logical(1))
-        .unwrap_or((1, 1).into());
+    let viewport_size = crate::state::output_logical_size(output);
     let visible_rect = canvas::visible_canvas_rect(
         camera.to_i32_round(),
         viewport_size,

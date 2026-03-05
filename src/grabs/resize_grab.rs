@@ -90,10 +90,7 @@ impl PointerGrab<DriftWm> for ResizeSurfaceGrab {
             let os = crate::state::output_state(&self.output);
             (os.camera, os.zoom)
         };
-        let output_size = self.output
-            .current_mode()
-            .map(|m| m.size.to_logical(1))
-            .unwrap_or((1, 1).into());
+        let output_size = crate::state::output_logical_size(&self.output);
         let screen = canvas_to_screen(CanvasPos(event.location), camera, zoom).0;
         let clamped_screen: Point<f64, Logical> = (
             screen.x.clamp(0.0, output_size.w as f64 - 1.0),

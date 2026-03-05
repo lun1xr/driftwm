@@ -407,10 +407,7 @@ impl DriftWm {
         }
 
         if let Some(target_center) = anim_center {
-            let vp = output
-                .current_mode()
-                .map(|m| m.size.to_logical(1))
-                .unwrap_or((1, 1).into());
+            let vp = super::output_logical_size(output);
 
             let current_center: Point<f64, Logical> = Point::from((
                 old_camera.x + vp.w as f64 / (2.0 * old_zoom),

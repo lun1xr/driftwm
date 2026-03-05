@@ -63,6 +63,10 @@ struct DeviceData {
 struct SurfaceData {
     compositor: GbmDrmCompositor,
     output: Output,
+    connector: connector::Handle,
+    make: String,
+    model: String,
+    serial_number: String,
 }
 
 /// Opaque handle to udev backend device data. Returned by init_udev,
@@ -95,6 +99,16 @@ pub(crate) fn render_if_needed(device: &UdevDevice, data: &mut CalloopData) {
 
     // 4. Foreign toplevel refresh (once per frame, not per-output)
     crate::render::refresh_foreign_toplevels(&mut data.state);
+
+    // 4b. Re-notify output management clients after apply_output_config
+    if data.state.output_config_dirty {
+        data.state.output_config_dirty = false;
+        let head_state = collect_output_state_from_surfaces(&dev.surfaces, &dev.drm);
+        driftwm::protocols::output_management::notify_changes::<DriftWm>(
+            &mut data.state.output_management_state,
+            head_state,
+        );
+    }
 
     // 5. Render outputs that need it
     for (&crtc, surface) in dev.surfaces.iter_mut() {
@@ -488,9 +502,7 @@ pub fn init_udev(
                                             if let Some(ref new_out) = data.state.focused_output {
                                                 let (cam, zoom, size) = {
                                                     let os = crate::state::output_state(new_out);
-                                                    let sz = new_out.current_mode()
-                                                        .map(|m| m.size.to_logical(1))
-                                                        .unwrap_or((1, 1).into());
+                                                    let sz = crate::state::output_logical_size(new_out);
                                                     (os.camera, os.zoom, sz)
                                                 };
                                                 let center = smithay::utils::Point::from((
@@ -521,6 +533,12 @@ pub fn init_udev(
                         }
                     }
                 }
+                // Notify output management clients after hotplug changes
+                let head_state = collect_output_state_from_surfaces(surfaces, drm);
+                driftwm::protocols::output_management::notify_changes::<DriftWm>(
+                    &mut data.state.output_management_state,
+                    head_state,
+                );
             }
             UdevEvent::Added { device_id: _, path } => {
                 tracing::info!("Udev device added: {path:?} (ignoring — single GPU)");
@@ -539,6 +557,12 @@ pub fn init_udev(
             data.state.active_crtcs.insert(crtc);
             render_frame(data, &mut surface.compositor, &surface.output, crtc);
         }
+        // 13. Notify output management clients of initial state
+        let head_state = collect_output_state_from_surfaces(&dev.surfaces, &dev.drm);
+        driftwm::protocols::output_management::notify_changes::<DriftWm>(
+            &mut data.state.output_management_state,
+            head_state,
+        );
     }
 
     Ok(UdevDevice(device))
@@ -666,13 +690,26 @@ fn create_surface(
     };
 
     let (phys_w, phys_h) = connector.size().unwrap_or((0, 0));
+    let edid = smithay_drm_extras::display_info::for_connector(drm, connector.handle());
+    let make = edid
+        .as_ref()
+        .and_then(|i| i.make())
+        .unwrap_or_else(|| "Unknown".to_string());
+    let model = edid
+        .as_ref()
+        .and_then(|i| i.model())
+        .unwrap_or_else(|| connector_name.clone());
+    let serial_number = edid
+        .as_ref()
+        .and_then(|i| i.serial())
+        .unwrap_or_default();
     let output = Output::new(
         connector_name.clone(),
         PhysicalProperties {
             size: (phys_w as i32, phys_h as i32).into(),
             subpixel: convert_subpixel(connector.subpixel()),
-            make: "driftwm".to_string(),
-            model: "udev".to_string(),
+            make: make.clone(),
+            model: model.clone(),
         },
     );
 
@@ -696,9 +733,7 @@ fn create_surface(
         _ => {
             // Auto: place left-to-right by connection order
             let auto_x: i32 = state.space.outputs().map(|o| {
-                o.current_mode()
-                    .map(|m| m.size.to_logical(1).w)
-                    .unwrap_or(0)
+                crate::state::output_logical_size(o).w
             }).sum();
             tracing::info!("Output {connector_name}: auto layout position ({auto_x}, 0)");
             (auto_x, 0).into()
@@ -768,7 +803,7 @@ fn create_surface(
     };
 
     // Each new output gets its own camera centered on its viewport
-    let logical_size = output_mode.size.to_logical(1);
+    let logical_size = transform.transform_size(output_mode.size.to_logical(1));
     let camera = smithay::utils::Point::from((
         -(logical_size.w as f64) / 2.0,
         -(logical_size.h as f64) / 2.0,
@@ -795,7 +830,14 @@ fn create_surface(
         .space
         .map_output(&output, effective_camera.to_i32_round());
 
-    Some(SurfaceData { compositor, output })
+    Some(SurfaceData {
+        compositor,
+        output,
+        connector: connector.handle(),
+        make,
+        model,
+        serial_number,
+    })
 }
 
 /// Render a single frame and queue it to the DRM compositor.
@@ -872,6 +914,61 @@ fn render_frame(
     // Post-render
     crate::render::post_render(&mut data.state, output);
     log_err("flush_clients", data.display.flush_clients());
+}
+
+use driftwm::protocols::output_management::{OutputHeadState, ModeInfo};
+
+fn collect_output_state_from_surfaces(
+    surfaces: &HashMap<crtc::Handle, SurfaceData>,
+    drm: &DrmDevice,
+) -> HashMap<String, OutputHeadState> {
+    use smithay::reexports::drm::control::Device as ControlDevice;
+    let mut result = HashMap::new();
+    for surface in surfaces.values() {
+        let output = &surface.output;
+        let name = output.name();
+        let mode = output.current_mode().unwrap();
+        let transform = output.current_transform();
+        let scale = output.current_scale().fractional_scale();
+        let layout_pos = crate::state::output_state(output).layout_position;
+
+        let modes: Vec<ModeInfo> = match ControlDevice::get_connector(drm, surface.connector, false) {
+            Ok(info) => info
+                .modes()
+                .iter()
+                .map(|m| ModeInfo {
+                    width: m.size().0 as i32,
+                    height: m.size().1 as i32,
+                    refresh: (m.vrefresh() as i32) * 1000,
+                    preferred: m.mode_type().contains(control::ModeTypeFlags::PREFERRED),
+                })
+                .collect(),
+            Err(_) => vec![],
+        };
+
+        let current_mode_index = modes.iter().position(|m| {
+            m.width == mode.size.w && m.height == mode.size.h && m.refresh == mode.refresh
+        });
+
+        let phys = output.physical_properties().size;
+        result.insert(
+            name.clone(),
+            OutputHeadState {
+                name,
+                description: format!("{} {} ({})", surface.make, surface.model, output.name()),
+                make: surface.make.clone(),
+                model: surface.model.clone(),
+                serial_number: surface.serial_number.clone(),
+                physical_size: (phys.w, phys.h),
+                modes,
+                current_mode_index,
+                position: (layout_pos.x, layout_pos.y),
+                transform,
+                scale,
+            },
+        );
+    }
+    result
 }
 
 fn convert_subpixel(sp: connector::SubPixel) -> Subpixel {

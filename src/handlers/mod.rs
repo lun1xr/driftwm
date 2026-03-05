@@ -381,6 +381,47 @@ impl ScreencopyHandler for DriftWm {
 
 driftwm::delegate_screencopy!(DriftWm);
 
+use driftwm::protocols::output_management::{
+    OutputManagementHandler, OutputManagementState, RequestedHeadConfig,
+};
+
+impl OutputManagementHandler for DriftWm {
+    fn output_management_state(&mut self) -> &mut OutputManagementState {
+        &mut self.output_management_state
+    }
+
+    fn apply_output_config(&mut self, configs: Vec<RequestedHeadConfig>) -> bool {
+        for cfg in &configs {
+            let output = self
+                .space
+                .outputs()
+                .find(|o| o.name() == cfg.output_name)
+                .cloned();
+            let Some(output) = output else {
+                return false;
+            };
+
+            let current_mode = output.current_mode();
+            let new_transform = cfg.transform.or_else(|| Some(output.current_transform()));
+            let new_scale = cfg.scale.map(smithay::output::Scale::Fractional);
+
+            output.change_current_state(current_mode, new_transform, new_scale, None);
+
+            if let Some((x, y)) = cfg.position {
+                let mut os = crate::state::output_state(&output);
+                os.layout_position = (x, y).into();
+            }
+
+            self.cached_bg_elements.remove(&cfg.output_name);
+        }
+        self.mark_all_dirty();
+        self.output_config_dirty = true;
+        true
+    }
+}
+
+driftwm::delegate_output_management!(DriftWm);
+
 use smithay::delegate_session_lock;
 use smithay::wayland::session_lock::{
     LockSurface, SessionLockHandler, SessionLockManagerState, SessionLocker,
@@ -445,9 +486,7 @@ impl SessionLockHandler for DriftWm {
             .or_else(|| self.active_output());
         let Some(output) = output else { return };
 
-        let output_size = output.current_mode()
-            .map(|m| m.size.to_logical(1))
-            .unwrap_or((1, 1).into());
+        let output_size = crate::state::output_logical_size(&output);
 
         surface.with_pending_state(|state| {
             state.size = Some((output_size.w as u32, output_size.h as u32).into());

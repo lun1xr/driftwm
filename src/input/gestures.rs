@@ -274,10 +274,7 @@ impl DriftWm {
                     let os = crate::state::output_state(&gesture_output);
                     (os.camera, os.zoom, os.layout_position)
                 };
-                let output_size = gesture_output
-                    .current_mode()
-                    .map(|m| m.size.to_logical(1))
-                    .unwrap_or((1, 1).into());
+                let output_size = crate::state::output_logical_size(&gesture_output);
 
                 // Current canvas → screen on gesture output, then to layout space
                 let old_screen = canvas_to_screen(CanvasPos(cursor_pos), cur_camera, cur_zoom).0;
@@ -347,10 +344,7 @@ impl DriftWm {
                         let os = crate::state::output_state(output);
                         (os.camera, os.zoom)
                     };
-                    let output_size = output
-                        .current_mode()
-                        .map(|m| m.size.to_logical(1))
-                        .unwrap_or((1, 1).into());
+                    let output_size = crate::state::output_logical_size(output);
                     let pointer = self.seat.get_pointer().unwrap();
                     let cur_screen = canvas_to_screen(CanvasPos(pointer.current_location()), cam, zm).0;
                     drop(pointer);

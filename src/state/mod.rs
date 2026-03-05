@@ -204,6 +204,15 @@ pub fn init_output_state(output: &Output, camera: Point<f64, Logical>, friction:
         });
 }
 
+/// Logical output size accounting for transform (90°/270° swap width/height).
+pub fn output_logical_size(output: &Output) -> Size<i32, Logical> {
+    let mode_size = output
+        .current_mode()
+        .map(|m| m.size.to_logical(1))
+        .unwrap_or((1, 1).into());
+    output.current_transform().transform_size(mode_size)
+}
+
 /// Get a lock on an output's per-output state.
 pub fn output_state(output: &Output) -> MutexGuard<'_, OutputState> {
     output
@@ -286,6 +295,7 @@ pub struct DriftWm {
     pub layer_shell_state: WlrLayerShellState,
     pub foreign_toplevel_state: driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState,
     pub screencopy_state: driftwm::protocols::screencopy::ScreencopyManagerState,
+    pub output_management_state: driftwm::protocols::output_management::OutputManagementState,
     pub pending_screencopies: Vec<driftwm::protocols::screencopy::Screencopy>,
     pub session_lock_manager_state: SessionLockManagerState,
     pub session_lock: SessionLock,
@@ -353,6 +363,9 @@ pub struct DriftWm {
     /// Output names kept as virtual placeholders when all physical outputs disconnect.
     /// Prevents `active_output().unwrap()` panics by keeping the output in the Space.
     pub disconnected_outputs: HashSet<String>,
+    /// Set when output config was applied via wlr-output-management; render loop
+    /// should re-collect output state and notify clients.
+    pub output_config_dirty: bool,
 }
 
 /// Per-client state stored by wayland-server for each connected client.
@@ -401,6 +414,8 @@ impl DriftWm {
             driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState::new::<Self, _>(&dh, |_| true);
         let screencopy_state =
             driftwm::protocols::screencopy::ScreencopyManagerState::new::<Self, _>(&dh, |_| true);
+        let output_management_state =
+            driftwm::protocols::output_management::OutputManagementState::new::<Self, _>(&dh, |_| true);
         let session_lock_manager_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
 
         let config = Config::load();
@@ -460,6 +475,7 @@ impl DriftWm {
             layer_shell_state,
             foreign_toplevel_state,
             screencopy_state,
+            output_management_state,
             pending_screencopies: Vec::new(),
             session_lock_manager_state,
             session_lock: SessionLock::Unlocked,
@@ -490,6 +506,7 @@ impl DriftWm {
             focused_output: None,
             gesture_output: None,
             disconnected_outputs: HashSet::new(),
+            output_config_dirty: false,
         }
     }
 
@@ -629,9 +646,7 @@ impl DriftWm {
         // Find which output's visible canvas rect contains the window center.
         let found = self.space.outputs().find(|output| {
             let os = output_state(output);
-            let size = output.current_mode()
-                .map(|m| m.size.to_logical(1))
-                .unwrap_or((1, 1).into());
+            let size = output_logical_size(output);
             let visible = driftwm::canvas::visible_canvas_rect(
                 os.camera.to_i32_round(), size, os.zoom,
             );
@@ -645,7 +660,7 @@ impl DriftWm {
     pub fn output_in_direction(&self, from: &Output, dir: &driftwm::config::Direction) -> Option<Output> {
         let from_center: Point<f64, Logical> = {
             let os = output_state(from);
-            let size = from.current_mode()?.size.to_logical(1);
+            let size = output_logical_size(from);
             Point::from((
                 os.layout_position.x as f64 + size.w as f64 / 2.0,
                 os.layout_position.y as f64 + size.h as f64 / 2.0,
@@ -657,7 +672,7 @@ impl DriftWm {
             .filter(|o| *o != from)
             .filter_map(|o| {
                 let os = output_state(o);
-                let size = o.current_mode()?.size.to_logical(1);
+                let size = output_logical_size(o);
                 let center: Point<f64, Logical> = Point::from((
                     os.layout_position.x as f64 + size.w as f64 / 2.0,
                     os.layout_position.y as f64 + size.h as f64 / 2.0,
@@ -686,10 +701,7 @@ impl DriftWm {
             let os = output_state(output);
             let lp = os.layout_position;
             drop(os);
-            let size = output
-                .current_mode()
-                .map(|m| m.size.to_logical(1))
-                .unwrap_or((1, 1).into());
+            let size = output_logical_size(output);
             pos.x >= lp.x as f64
                 && pos.x < (lp.x + size.w) as f64
                 && pos.y >= lp.y as f64
@@ -818,8 +830,7 @@ impl DriftWm {
     /// Logical viewport size of the active (pointer-focused) output.
     pub fn get_viewport_size(&self) -> Size<i32, Logical> {
         self.active_output()
-            .and_then(|o| o.current_mode())
-            .map(|m| m.size.to_logical(1))
+            .map(|o| output_logical_size(&o))
             .unwrap_or((1, 1).into())
     }
 

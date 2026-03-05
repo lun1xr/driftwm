@@ -89,7 +89,8 @@ impl WlrLayerShellHandler for DriftWm {
 
             // Configure with output width; height left to client
             let output_mode = resolved_output.current_mode().unwrap();
-            let output_w = output_mode.size.to_logical(1).w;
+            let output_w = resolved_output.current_transform()
+                .transform_size(output_mode.size.to_logical(1)).w;
             desktop_surface.layer_surface().with_pending_state(|state| {
                 state.size = Some((output_w, 0).into());
             });

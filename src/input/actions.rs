@@ -399,9 +399,7 @@ impl DriftWm {
                         // Compute target output's viewport center in canvas coords
                         let (target_cam, target_zoom, target_size) = {
                             let os = crate::state::output_state(&target_output);
-                            let sz = target_output.current_mode()
-                                .map(|m| m.size.to_logical(1))
-                                .unwrap_or((1, 1).into());
+                            let sz = crate::state::output_logical_size(&target_output);
                             (os.camera, os.zoom, sz)
                         };
                         let center_x = target_cam.x + target_size.w as f64 / (2.0 * target_zoom);

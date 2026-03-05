@@ -14,7 +14,7 @@ use smithay::{
 use driftwm::canvas::{CanvasPos, canvas_to_screen};
 use driftwm::config;
 use driftwm::snap::{SnapRect, SnapParams, SnapState, update_axis};
-use crate::state::{DriftWm, output_state};
+use crate::state::{DriftWm, output_state, output_logical_size};
 
 /// Which output edge is inhibited after a cross-output teleport.
 #[derive(Clone, Copy)]
@@ -102,20 +102,14 @@ impl MoveSurfaceGrab {
         let old_os = output_state(old_output);
         let old_lp = old_os.layout_position;
         drop(old_os);
-        let old_size = old_output
-            .current_mode()
-            .map(|m| m.size.to_logical(1))
-            .unwrap_or((1, 1).into());
+        let old_size = output_logical_size(old_output);
         let old_cx = old_lp.x as f64 + old_size.w as f64 / 2.0;
         let old_cy = old_lp.y as f64 + old_size.h as f64 / 2.0;
 
         let new_os = output_state(new_output);
         let new_lp = new_os.layout_position;
         drop(new_os);
-        let new_size = new_output
-            .current_mode()
-            .map(|m| m.size.to_logical(1))
-            .unwrap_or((1, 1).into());
+        let new_size = output_logical_size(new_output);
         let new_cx = new_lp.x as f64 + new_size.w as f64 / 2.0;
         let new_cy = new_lp.y as f64 + new_size.h as f64 / 2.0;
 
@@ -305,9 +299,7 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
             (os.camera, os.zoom)
         };
         let screen_pos = canvas_to_screen(CanvasPos(event.location), camera, zoom).0;
-        let output_size = self.output
-            .current_mode()
-            .map(|m| m.size.to_logical(1));
+        let output_size = Some(output_logical_size(&self.output));
 
         if let Some(size) = output_size {
             let cfg = &data.config;

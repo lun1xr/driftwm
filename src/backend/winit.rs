@@ -87,6 +87,37 @@ pub fn init_winit(
         .space
         .map_output(&output, initial_camera.to_i32_round());
 
+    // Notify output management clients about the winit output
+    {
+        use driftwm::protocols::output_management::{OutputHeadState, ModeInfo};
+        let mut heads = std::collections::HashMap::new();
+        heads.insert(
+            "winit".to_string(),
+            OutputHeadState {
+                name: "winit".to_string(),
+                description: "driftwm winit virtual output".to_string(),
+                make: "driftwm".to_string(),
+                model: "winit".to_string(),
+                serial_number: String::new(),
+                physical_size: (0, 0),
+                modes: vec![ModeInfo {
+                    width: size.w,
+                    height: size.h,
+                    refresh: 60_000,
+                    preferred: true,
+                }],
+                current_mode_index: Some(0),
+                position: (0, 0),
+                transform: Transform::Flipped180,
+                scale: 1.0,
+            },
+        );
+        driftwm::protocols::output_management::notify_changes::<crate::state::DriftWm>(
+            &mut data.state.output_management_state,
+            heads,
+        );
+    }
+
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
 
     // Render loop: fires immediately, then re-arms at ~60fps
