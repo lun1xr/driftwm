@@ -708,7 +708,13 @@ fn build_output_outline_elements(
             if let Ok(elem) = MemoryRenderBufferRenderElement::from_buffer(
                 renderer, loc, &buf, Some(opacity), None, None, Kind::Unspecified,
             ) {
-                elements.push(OutputRenderElements::Cursor(elem));
+                elements.push(OutputRenderElements::Tile(
+                    RescaleRenderElement::from_element(
+                        elem,
+                        Point::<i32, Physical>::from((0, 0)),
+                        1.0,
+                    ),
+                ));
             }
         }
     }
