@@ -142,6 +142,8 @@
 # "XF86MonBrightnessUp" = "spawn brightnessctl set +5%"
 # "XF86MonBrightnessDown" = "spawn brightnessctl set 5%-"
 # "Print" = "spawn grim - | wl-copy"
+# "shift+Print" = "spawn grim -g \"$(slurp -d)\" - | wl-copy"
+# "alt+Print" = "spawn grim -g \"$(slurp)\" - | wl-copy"
 
 # Mouse bindings: "Modifier+...+Trigger" = "action"
 # Context-aware: on-window, on-canvas, anywhere.

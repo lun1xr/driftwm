@@ -264,6 +264,14 @@ pub(super) fn default_bindings(mod_key: ModKey, cycle_mod: CycleModifier) -> Has
             KeyCombo { modifiers: Modifiers::EMPTY, sym: Keysym::from(keysyms::KEY_Print) },
             Action::Spawn("grim - | wl-copy".into()),
         ),
+        (
+            KeyCombo { modifiers: Modifiers { shift: true, ..Modifiers::EMPTY }, sym: Keysym::from(keysyms::KEY_Print) },
+            Action::Spawn("grim -g \"$(slurp -d)\" - | wl-copy".into()),
+        ),
+        (
+            KeyCombo { modifiers: Modifiers { alt: true, ..Modifiers::EMPTY }, sym: Keysym::from(keysyms::KEY_Print) },
+            Action::Spawn("grim -g \"$(slurp)\" - | wl-copy".into()),
+        ),
         // Lock screen
         (
             KeyCombo { modifiers: m.clone(), sym: Keysym::from(keysyms::KEY_l) },
