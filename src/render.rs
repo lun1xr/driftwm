@@ -54,7 +54,7 @@ pub const BG_UNIFORMS: &[UniformName<'static>] = &[UniformName {
 }];
 
 /// Shadow shader source — soft box-shadow around SSD windows.
-const SHADOW_SHADER_SRC: &str = include_str!("../assets/shaders/shadow.glsl");
+const SHADOW_SHADER_SRC: &str = include_str!("shaders/shadow.glsl");
 
 /// Uniform declarations for the shadow shader.
 pub const SHADOW_UNIFORMS: &[UniformName<'static>] = &[
