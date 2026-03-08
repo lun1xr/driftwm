@@ -456,3 +456,14 @@ impl XWaylandShellHandler for DriftWm {
 }
 
 delegate_xwayland_shell!(DriftWm);
+
+use smithay::delegate_xwayland_keyboard_grab;
+use smithay::wayland::xwayland_keyboard_grab::XWaylandKeyboardGrabHandler;
+
+impl XWaylandKeyboardGrabHandler for DriftWm {
+    fn keyboard_focus_for_xsurface(&self, surface: &WlSurface) -> Option<FocusTarget> {
+        self.find_x11_surface_by_wl(surface)
+            .map(|_| FocusTarget(surface.clone()))
+    }
+}
+delegate_xwayland_keyboard_grab!(DriftWm);

@@ -451,6 +451,10 @@ impl DriftWm {
             use smithay::wayland::shell::xdg::dialog::XdgDialogState;
             XdgDialogState::new::<Self>(&dh);
         }
+        {
+            use smithay::wayland::xwayland_keyboard_grab::XWaylandKeyboardGrabState;
+            XWaylandKeyboardGrabState::new::<Self>(&dh);
+        }
 
         let config = Config::load();
 
