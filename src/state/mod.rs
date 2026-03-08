@@ -148,6 +148,7 @@ pub struct FullscreenState {
     pub saved_location: Point<i32, Logical>,
     pub saved_camera: Point<f64, Logical>,
     pub saved_zoom: f64,
+    pub saved_size: Size<i32, Logical>,
 }
 
 /// Per-output viewport state, stored on each `Output` via `UserDataMap`.
@@ -569,6 +570,14 @@ impl DriftWm {
     /// Find a mapped window wrapping the given X11 surface.
     pub fn find_x11_window(&self, x11: &X11Surface) -> Option<Window> {
         self.space.elements().find(|w| w.x11_surface() == Some(x11)).cloned()
+    }
+
+    /// Find the X11Surface whose underlying wl_surface matches the given one.
+    pub fn find_x11_surface_by_wl(&self, wl: &WlSurface) -> Option<X11Surface> {
+        self.space
+            .elements()
+            .filter_map(|w| w.x11_surface().cloned())
+            .find(|x11| x11.wl_surface().as_ref() == Some(wl))
     }
 
     /// Compute the canvas position of an override-redirect X11 surface.

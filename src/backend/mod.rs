@@ -3,6 +3,8 @@ pub mod winit;
 
 use smithay::backend::renderer::gles::GlesRenderer;
 use smithay::backend::winit::WinitGraphicsBackend;
+use smithay::reexports::wayland_server::Resource;
+use smithay::wayland::seat::WaylandFocus;
 
 /// Backend abstraction — winit (nested) or udev (real hardware).
 /// Only the renderer lives here; udev-specific state (DRM, session, etc.)
@@ -69,7 +71,68 @@ pub fn spawn_xwayland(
             }
         }
         XWaylandEvent::Error => {
-            tracing::error!("XWayland failed to start");
+            tracing::warn!("XWayland crashed, restarting...");
+
+            // Clean up dead X11 state
+            data.state.x11_wm = None;
+            data.state.xwayland_client = None;
+            data.state.x11_display = None;
+            data.state.x11_override_redirect.clear();
+            // SAFETY: no other threads mutate env vars concurrently
+            unsafe { std::env::remove_var("DISPLAY"); }
+
+            // Collect X11 windows to remove
+            let x11_windows: Vec<_> = data.state.space.elements()
+                .filter(|w| w.x11_surface().is_some())
+                .cloned()
+                .collect();
+
+            // Restore fullscreen state for any fullscreen X11 windows
+            let fs_outputs: Vec<_> = data.state.fullscreen.iter()
+                .filter(|(_, fs)| x11_windows.contains(&fs.window))
+                .map(|(o, _)| o.clone())
+                .collect();
+            for output in fs_outputs {
+                if let Some(fs) = data.state.fullscreen.remove(&output) {
+                    crate::state::output_state(&output).camera = fs.saved_camera;
+                    crate::state::output_state(&output).zoom = fs.saved_zoom;
+                }
+            }
+            if !x11_windows.is_empty() {
+                data.state.update_output_from_camera();
+            }
+
+            // Clear keyboard focus if it's on a dying X11 window
+            let keyboard = data.state.seat.get_keyboard().unwrap();
+            if let Some(focused) = keyboard.current_focus()
+                && x11_windows.iter().any(|w| w.wl_surface().as_deref() == Some(&focused.0))
+            {
+                keyboard.set_focus(
+                    &mut data.state,
+                    None::<crate::state::FocusTarget>,
+                    smithay::utils::SERIAL_COUNTER.next_serial(),
+                );
+            }
+
+            // Unmap X11 windows and clean up associated state
+            for w in &x11_windows {
+                if let Some(wl_surface) = w.wl_surface() {
+                    let id = Resource::id(&*wl_surface);
+                    data.state.decorations.remove(&id);
+                    data.state.pending_ssd.remove(&id);
+                    data.state.pending_center.remove(&*wl_surface);
+                }
+                data.state.focus_history.retain(|fw| fw != w);
+                data.state.space.unmap_elem(w);
+            }
+
+            // Restart XWayland
+            spawn_xwayland(&data.state.display_handle, &handle);
+
+            std::process::Command::new("notify-send")
+                .args(["-u", "critical", "XWayland crashed", "X11 apps were lost. XWayland has been restarted."])
+                .spawn()
+                .ok();
         }
     }) {
         tracing::error!("Failed to register XWayland event source: {err}");

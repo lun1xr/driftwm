@@ -11,7 +11,7 @@ pub trait WindowExt {
     /// For X11: checks MOTIF hints. For Wayland: checks xdg-decoration mode.
     fn wants_ssd(&self) -> bool;
     fn enter_fullscreen_configure(&self, size: Size<i32, Logical>);
-    fn exit_fullscreen_configure(&self);
+    fn exit_fullscreen_configure(&self, saved_size: Size<i32, Logical>);
 }
 
 impl WindowExt for Window {
@@ -79,7 +79,7 @@ impl WindowExt for Window {
         }
     }
 
-    fn exit_fullscreen_configure(&self) {
+    fn exit_fullscreen_configure(&self, saved_size: Size<i32, Logical>) {
         if let Some(toplevel) = self.toplevel() {
             use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
             toplevel.with_pending_state(|state| {
@@ -89,6 +89,7 @@ impl WindowExt for Window {
             toplevel.send_configure();
         } else if let Some(x11) = self.x11_surface() {
             x11.set_fullscreen(false).ok();
+            x11.configure(Rectangle::new(x11.geometry().loc, saved_size)).ok();
         }
     }
 }

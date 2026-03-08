@@ -21,8 +21,9 @@ export SSH_AUTH_SOCK GNOME_KEYRING_CONTROL
 systemctl --user start graphical-session-pre.target
 systemctl --user start graphical-session.target
 
-# Run driftwm (not exec — we need the shell to survive for cleanup).
-driftwm
+# Run driftwm with logs captured for debugging.
+DRIFTWM_LOG="${XDG_RUNTIME_DIR:-/tmp}/driftwm.log"
+driftwm 2>"$DRIFTWM_LOG"
 STATUS=$?
 
 # Compositor exited — tear down the graphical session so dependent

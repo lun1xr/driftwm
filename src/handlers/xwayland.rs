@@ -92,6 +92,12 @@ impl XwmHandler for CalloopData {
     fn cleared_selection(&mut self, xwm: XwmId, sel: SelectionTarget) {
         XwmHandler::cleared_selection(&mut self.state, xwm, sel);
     }
+    fn fullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+        XwmHandler::fullscreen_request(&mut self.state, xwm, window);
+    }
+    fn unfullscreen_request(&mut self, xwm: XwmId, window: X11Surface) {
+        XwmHandler::unfullscreen_request(&mut self.state, xwm, window);
+    }
 }
 
 impl XWaylandShellHandler for CalloopData {
@@ -357,6 +363,21 @@ impl XwmHandler for DriftWm {
     fn cleared_selection(&mut self, _xwm: XwmId, sel: SelectionTarget) {
         if let Some(wm) = self.x11_wm.as_mut() {
             wm.new_selection(sel, None).ok();
+        }
+    }
+
+    fn fullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        if let Some(smithay_window) = self.find_x11_window(&window) {
+            self.enter_fullscreen(&smithay_window);
+        }
+    }
+
+    fn unfullscreen_request(&mut self, _xwm: XwmId, window: X11Surface) {
+        if let Some(smithay_window) = self.find_x11_window(&window)
+            && let Some(wl_surface) = smithay_window.wl_surface()
+            && let Some(output) = self.find_fullscreen_output_for_surface(&wl_surface)
+        {
+            self.exit_fullscreen_on(&output);
         }
     }
 }

@@ -25,6 +25,7 @@ impl DriftWm {
             saved_location,
             saved_camera: self.camera(),
             saved_zoom: self.zoom(),
+            saved_size: window.geometry().size,
         });
 
         window.enter_fullscreen_configure(viewport_size);
@@ -70,7 +71,7 @@ impl DriftWm {
             return;
         };
 
-        fs.window.exit_fullscreen_configure();
+        fs.window.exit_fullscreen_configure(fs.saved_size);
 
         // Restore window position, camera, zoom on the specific output
         self.space.map_element(fs.window, fs.saved_location, false);

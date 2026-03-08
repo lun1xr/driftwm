@@ -2,8 +2,8 @@
 //!
 //! Required because `PopupGrab` needs `KeyboardFocus: From<PopupKind>`, and we
 //! can't impl `From<PopupKind> for WlSurface` (orphan rule). All input-target
-//! trait methods delegate to the inner `WlSurface` via fully-qualified syntax
-//! to avoid clashing with `WlSurface::enter()` (the protocol method).
+//! Keyboard methods route through `X11Surface` when applicable (for ICCCM
+//! `SetInputFocus` + `WM_TAKE_FOCUS`); pointer/touch delegate to `WlSurface`.
 
 use std::borrow::Cow;
 
@@ -27,6 +27,7 @@ use smithay::{
     reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::{IsAlive, Serial},
     wayland::seat::WaylandFocus,
+    xwayland::X11Surface,
 };
 
 use crate::state::DriftWm;
@@ -67,11 +68,19 @@ impl KeyboardTarget<DriftWm> for FocusTarget {
         keys: Vec<KeysymHandle<'_>>,
         serial: Serial,
     ) {
-        <WlSurface as KeyboardTarget<DriftWm>>::enter(&self.0, seat, data, keys, serial);
+        if let Some(x11) = data.find_x11_surface_by_wl(&self.0) {
+            <X11Surface as KeyboardTarget<DriftWm>>::enter(&x11, seat, data, keys, serial);
+        } else {
+            <WlSurface as KeyboardTarget<DriftWm>>::enter(&self.0, seat, data, keys, serial);
+        }
     }
 
     fn leave(&self, seat: &Seat<DriftWm>, data: &mut DriftWm, serial: Serial) {
-        <WlSurface as KeyboardTarget<DriftWm>>::leave(&self.0, seat, data, serial);
+        if let Some(x11) = data.find_x11_surface_by_wl(&self.0) {
+            <X11Surface as KeyboardTarget<DriftWm>>::leave(&x11, seat, data, serial);
+        } else {
+            <WlSurface as KeyboardTarget<DriftWm>>::leave(&self.0, seat, data, serial);
+        }
     }
 
     fn key(
@@ -83,7 +92,11 @@ impl KeyboardTarget<DriftWm> for FocusTarget {
         serial: Serial,
         time: u32,
     ) {
-        <WlSurface as KeyboardTarget<DriftWm>>::key(&self.0, seat, data, key, state, serial, time);
+        if let Some(x11) = data.find_x11_surface_by_wl(&self.0) {
+            <X11Surface as KeyboardTarget<DriftWm>>::key(&x11, seat, data, key, state, serial, time);
+        } else {
+            <WlSurface as KeyboardTarget<DriftWm>>::key(&self.0, seat, data, key, state, serial, time);
+        }
     }
 
     fn modifiers(
@@ -93,7 +106,11 @@ impl KeyboardTarget<DriftWm> for FocusTarget {
         modifiers: ModifiersState,
         serial: Serial,
     ) {
-        <WlSurface as KeyboardTarget<DriftWm>>::modifiers(&self.0, seat, data, modifiers, serial);
+        if let Some(x11) = data.find_x11_surface_by_wl(&self.0) {
+            <X11Surface as KeyboardTarget<DriftWm>>::modifiers(&x11, seat, data, modifiers, serial);
+        } else {
+            <WlSurface as KeyboardTarget<DriftWm>>::modifiers(&self.0, seat, data, modifiers, serial);
+        }
     }
 }
 
