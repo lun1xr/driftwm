@@ -276,6 +276,26 @@ delegate_idle_inhibit!(DriftWm);
 delegate_presentation!(DriftWm);
 delegate_single_pixel_buffer!(DriftWm);
 
+use smithay::wayland::xdg_foreign::{XdgForeignHandler, XdgForeignState};
+use smithay::delegate_xdg_foreign;
+
+impl XdgForeignHandler for DriftWm {
+    fn xdg_foreign_state(&mut self) -> &mut XdgForeignState {
+        &mut self.xdg_foreign_state
+    }
+}
+delegate_xdg_foreign!(DriftWm);
+
+use smithay::delegate_content_type;
+delegate_content_type!(DriftWm);
+
+use smithay::wayland::shell::xdg::dialog::XdgDialogHandler;
+use smithay::delegate_xdg_dialog;
+
+// TODO: implement modal_changed() to block parent focus/input while modal child exists
+impl XdgDialogHandler for DriftWm {}
+delegate_xdg_dialog!(DriftWm);
+
 use smithay::wayland::shell::xdg::decoration::XdgDecorationHandler;
 use smithay::wayland::shell::xdg::ToplevelSurface;
 use smithay::delegate_xdg_decoration;

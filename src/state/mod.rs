@@ -46,6 +46,8 @@ use smithay::wayland::selection::wlr_data_control::DataControlState;
 use smithay::wayland::viewporter::ViewporterState;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
 use smithay::wayland::xdg_activation::XdgActivationState;
+use smithay::wayland::xdg_foreign::XdgForeignState;
+use smithay::wayland::content_type::ContentTypeState;
 use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
 use smithay::backend::renderer::gles::{GlesPixelProgram, element::PixelShaderElement};
 use smithay::utils::Transform;
@@ -307,6 +309,7 @@ pub struct DriftWm {
     pub image_capture_source_state: driftwm::protocols::image_capture_source::ImageCaptureSourceState,
     pub image_copy_capture_state: driftwm::protocols::image_copy_capture::ImageCopyCaptureState,
     pub pending_captures: Vec<driftwm::protocols::image_copy_capture::PendingCapture>,
+    pub xdg_foreign_state: XdgForeignState,
     pub session_lock_manager_state: SessionLockManagerState,
     pub session_lock: SessionLock,
     // -- per-output: lock surface (one per output in multi-monitor) --
@@ -442,6 +445,12 @@ impl DriftWm {
             driftwm::protocols::output_management::OutputManagementState::new::<Self, _>(&dh, |_| true);
         let session_lock_manager_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
+        let xdg_foreign_state = XdgForeignState::new::<Self>(&dh);
+        ContentTypeState::new::<Self>(&dh);
+        {
+            use smithay::wayland::shell::xdg::dialog::XdgDialogState;
+            XdgDialogState::new::<Self>(&dh);
+        }
 
         let config = Config::load();
 
@@ -505,6 +514,7 @@ impl DriftWm {
             image_capture_source_state,
             image_copy_capture_state,
             pending_captures: Vec::new(),
+            xdg_foreign_state,
             session_lock_manager_state,
             session_lock: SessionLock::Unlocked,
             lock_surfaces: HashMap::new(),
