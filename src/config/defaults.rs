@@ -271,7 +271,7 @@ pub(super) fn default_bindings(mod_key: ModKey, cycle_mod: CycleModifier) -> Has
         // Lock screen
         (
             KeyCombo { modifiers: m.clone(), sym: Keysym::from(keysyms::KEY_l) },
-            Action::Exec("swaylock -f -c 000000 -kl".into()),
+            Action::Spawn("swaylock -f -c 000000 -kl".into()),
         ),
     ]);
 

@@ -118,7 +118,7 @@ def execute(action: str) -> None:
     if action == "lock":
         _spawn_shell(_LOCK_CMD)
     elif action == "suspend":
-        _spawn_shell(f"{_LOCK_CMD} & sleep 0.5 && systemctl suspend")
+        subprocess.run(["systemctl", "suspend"], check=False)
     elif action == "logout":
         subprocess.run(["pkill", "-x", "driftwm"], check=False)
     elif action == "reboot":

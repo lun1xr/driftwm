@@ -9,6 +9,7 @@ autostart = [
     "vorta -d",
     "~/Documents/work/scripts/driftwm/widgets/launch.sh",
     "~/Documents/work/scripts/driftwm/widgets/battery_notify.sh",
+    "swayidle -w timeout 600 'brightnessctl -s set 10%' resume 'brightnessctl -r' timeout 630 'swaylock -f -c 000000 -kl' before-sleep 'swaylock -f -c 000000 -kl'",
 ]
 
 [input.keyboard]
