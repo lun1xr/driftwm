@@ -1,4 +1,5 @@
 # driftwm — personal config (symlink to ~/.config/driftwm/config.toml)
+# ln -sf ~/Documents/work/scripts/driftwm/extras/config.toml ~/.config/driftwm/config.toml
 
 autostart = [
     "/usr/libexec/polkit-gnome-authentication-agent-1",
@@ -7,8 +8,8 @@ autostart = [
     "waybar -c ~/.config/waybar/taskbar.jsonc -s ~/.config/waybar/taskbar.css",
     "sleep 1 && waybar -c ~/.config/waybar/tray.jsonc -s ~/.config/waybar/tray.css",
     "vorta -d",
-    "~/Documents/work/scripts/driftwm/widgets/launch.sh",
-    "~/Documents/work/scripts/driftwm/widgets/battery_notify.sh",
+    "~/Documents/work/scripts/driftwm/extras/widgets/launch.sh",
+    "~/Documents/work/scripts/driftwm/extras/widgets/battery_notify.sh",
     "swayidle -w timeout 600 'brightnessctl -s set 10%' resume 'brightnessctl -r' timeout 630 'swaylock -f -c 000000 -kl' before-sleep 'swaylock -f -c 000000 -kl'",
 ]
 

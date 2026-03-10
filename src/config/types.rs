@@ -476,7 +476,7 @@ pub enum OutputMode {
 }
 
 /// Built-in dot grid shader — used when no shader_path or tile_path is configured.
-pub const DEFAULT_SHADER: &str = include_str!("../../assets/shaders/dot_grid.glsl");
+pub const DEFAULT_SHADER: &str = include_str!("../shaders/dot_grid.glsl");
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BackgroundConfig {
