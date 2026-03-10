@@ -115,7 +115,7 @@ app_id = "drift-power-menu"
 position = [274, -370]
 no_focus = false
 widget = true
-decoration = "none"
+decoration = "server"
 sharp_scale = false
 
 [[window_rules]]
