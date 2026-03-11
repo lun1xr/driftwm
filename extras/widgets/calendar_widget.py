@@ -32,7 +32,7 @@ def render() -> Text:
     text.append("\n" * top_pad)
     header = f"{calendar.month_name[month].lower()} {year}"
     text.append(f" {ICON['calendar']} {header}\n", style="bold")
-    text.append(" Mo Tu We Th Fr Sa Su\n")
+    text.append(" mo tu we th fr sa su\n")
 
     for week in cal:
         line = Text(" ")

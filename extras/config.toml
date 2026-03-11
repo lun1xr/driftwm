@@ -9,8 +9,8 @@ autostart = [
     "sleep 1 && waybar -c ~/.config/waybar/tray.jsonc -s ~/.config/waybar/tray.css",
     "vorta -d",
     "~/Documents/work/scripts/driftwm/extras/widgets/launch.sh",
-    "~/Documents/work/scripts/driftwm/extras/widgets/battery_notify.sh",
-    "swayidle -w timeout 600 'brightnessctl -s set 10%' resume 'brightnessctl -r' timeout 630 'swaylock -f -c 000000 -kl' before-sleep 'swaylock -f -c 000000 -kl'",
+    "~/Documents/work/scripts/driftwm/extras/scripts/battery_notify.sh",
+    "swayidle -w timeout 300 'brightnessctl -s set 10%' resume 'brightnessctl -r' timeout 330 '~/Documents/work/scripts/driftwm/extras/scripts/lock.sh' timeout 600 'systemctl suspend' before-sleep '~/Documents/work/scripts/driftwm/extras/scripts/lock.sh'",
 ]
 
 [input.keyboard]
@@ -33,6 +33,7 @@ color="#FDF6E3"
 [keybindings]
 "mod+return" = "exec ptyxis -s"
 "mod+d" = "exec fuzzel"
+"mod+l" = "spawn ~/Documents/work/scripts/driftwm/extras/scripts/lock.sh"
 "mod+n" = "spawn swaync-client -t"
 # swayosd instead of default wpctl/brightnessctl
 "XF86AudioRaiseVolume" = "spawn swayosd-client --output-volume raise"

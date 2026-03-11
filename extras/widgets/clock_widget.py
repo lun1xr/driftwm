@@ -5,11 +5,10 @@ import os
 import time
 from datetime import datetime
 
+from common import render_big_time
 from rich.console import Console
 from rich.live import Live
 from rich.text import Text
-
-from common import render_big_time
 
 WIDTH = 36
 console = Console(width=WIDTH, highlight=False)
@@ -22,6 +21,7 @@ def center(line: str) -> str:
 
 def render() -> Text:
     text = Text()
+    time.tzset()
     now = datetime.now()  # noqa: DTZ005
     try:
         term_h = os.get_terminal_size().lines

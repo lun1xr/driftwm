@@ -530,9 +530,9 @@ def get_bluetooth() -> str | None:
         ]
         if not devices:
             return f"{ICON['bt_on']}  on"
-        name = devices[0][:16]
-        count = len(devices)
-        return f"{ICON['bt_connected']}  {name} ({count})"
+        if len(devices) == 1:
+            return f"{ICON['bt_connected']}  {devices[0][:16]}"
+        return f"{ICON['bt_connected']}  {len(devices)} devices"
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
 
