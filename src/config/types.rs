@@ -427,7 +427,7 @@ impl Default for DecorationConfig {
 impl DecorationConfig {
     pub const TITLE_BAR_HEIGHT: i32 = 25;
     pub const SHADOW_RADIUS: f32 = 14.0;
-    pub const SHADOW_COLOR: [u8; 4] = [0x00, 0x00, 0x00, 0x18];
+    pub const SHADOW_COLOR: [u8; 4] = [0x00, 0x00, 0x00, 0x66];
     pub const RESIZE_BORDER_WIDTH: i32 = 8;
 }
 
