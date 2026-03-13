@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Clock + date widget."""
 
+import atexit
 import os
 import time
 from datetime import datetime
 
-from common import render_big_time
+from common import disable_mouse, enable_mouse, poll_click, render_big_time
 from rich.console import Console
 from rich.live import Live
 from rich.text import Text
@@ -39,8 +40,13 @@ def render() -> Text:
     return text
 
 
+atexit.register(disable_mouse)
+enable_mouse()
 console.clear()
-with Live(render(), console=console, refresh_per_second=1) as live:
-    while True:
-        live.update(render())
-        time.sleep(1)
+try:
+    with Live(render(), console=console, refresh_per_second=1) as live:
+        while True:
+            live.update(render())
+            poll_click(1.0)
+finally:
+    disable_mouse()

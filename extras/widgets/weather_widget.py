@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Weather widget — fetches from wttr.in, caches for 10 minutes."""
 
+import atexit
 import time
 
-from common import get_weather, weather_icon
+from common import disable_mouse, enable_mouse, get_weather, poll_click, weather_icon
 from rich.console import Console
 from rich.live import Live
 from rich.text import Text
@@ -54,8 +55,13 @@ def render() -> Text:
     return text
 
 
+atexit.register(disable_mouse)
+enable_mouse()
 console.clear()
-with Live(render(), console=console, refresh_per_second=1) as live:
-    while True:
-        live.update(render())
-        time.sleep(60)
+try:
+    with Live(render(), console=console, refresh_per_second=1) as live:
+        while True:
+            live.update(render())
+            poll_click(60.0)
+finally:
+    disable_mouse()

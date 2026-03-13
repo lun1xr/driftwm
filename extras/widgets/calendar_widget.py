@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """Monthly calendar widget with today highlighted."""
 
+import atexit
 import calendar
 import os
-import time
 from datetime import datetime
 
+from common import ICON, disable_mouse, enable_mouse, poll_click
 from rich.console import Console
 from rich.live import Live
 from rich.text import Text
-
-from common import ICON
 
 console = Console(width=22, highlight=False)
 
@@ -49,8 +48,13 @@ def render() -> Text:
     return text
 
 
+atexit.register(disable_mouse)
+enable_mouse()
 console.clear()
-with Live(render(), console=console, refresh_per_second=1) as live:
-    while True:
-        live.update(render())
-        time.sleep(30)
+try:
+    with Live(render(), console=console, refresh_per_second=1) as live:
+        while True:
+            live.update(render())
+            poll_click(30.0)
+finally:
+    disable_mouse()

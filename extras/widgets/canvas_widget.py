@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Canvas position widget — shows saved (home-toggle) viewport coords."""
 
+import atexit
 import os
-import time
 
-from common import ICON, read_state_file
+from common import ICON, disable_mouse, enable_mouse, poll_click, read_state_file
 from rich.console import Console
 from rich.live import Live
 from rich.text import Text
@@ -35,8 +35,13 @@ def render() -> Text:
     return text
 
 
+atexit.register(disable_mouse)
+enable_mouse()
 console.clear()
-with Live(render(), console=console, refresh_per_second=2) as live:
-    while True:
-        live.update(render())
-        time.sleep(1)
+try:
+    with Live(render(), console=console, refresh_per_second=2) as live:
+        while True:
+            live.update(render())
+            poll_click(1.0)
+finally:
+    disable_mouse()
