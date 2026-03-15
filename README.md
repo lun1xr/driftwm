@@ -1,4 +1,4 @@
-<h1 align="center"><img alt="driftwm" src="assets/logo.jpg" width="400"></h1>
+<p align="center"><img alt="driftwm" src="assets/logo.jpg" width="500"></p>
 <p align="center">A trackpad-first infinite canvas Wayland compositor.</p>
 <p align="center">
     <a href="https://github.com/malbiruk/driftwm/blob/main/LICENSE"><img alt="License: GPL-3.0-or-later" src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue"></a>
