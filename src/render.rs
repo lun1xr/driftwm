@@ -848,6 +848,7 @@ pub fn compose_frame(
 
         let target = if is_widget { &mut zoomed_widgets } else { &mut zoomed_normal };
         let elem_start = target.len();
+        let mut shadow_count = 0usize;
 
         if has_ssd {
             let bar_height = driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT;
@@ -982,6 +983,7 @@ pub fn compose_frame(
                             zoom,
                         ),
                     ));
+                    shadow_count = 1;
                 }
             }
         } else if let Some(ref shader) = state.corner_clip_shader {
@@ -1070,6 +1072,7 @@ pub fn compose_frame(
                             zoom,
                         ),
                     ));
+                    shadow_count = 1;
                 }
             } else {
                 target.extend(elems.into_iter().map(|elem| {
@@ -1091,8 +1094,8 @@ pub fn compose_frame(
         }
 
         if wants_blur {
-            let elem_count = target.len() - elem_start;
-            let screen_loc = Point::from((
+            let elem_count = target.len() - elem_start - shadow_count;
+            let screen_loc: Point<i32, Logical> = Point::from((
                 (render_loc.x * zoom) as i32,
                 (render_loc.y * zoom) as i32,
             ));
@@ -1115,7 +1118,12 @@ pub fn compose_frame(
                         screen_loc.y - (driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT as f64 * zoom) as i32,
                     ))
                 } else {
-                    screen_loc
+                    // CSD windows: geometry starts at render_loc + geo.loc, not at render_loc
+                    let geo = window.geometry();
+                    Point::from((
+                        ((render_loc.x + geo.loc.x as f64) * zoom) as i32,
+                        ((render_loc.y + geo.loc.y as f64) * zoom) as i32,
+                    ))
                 },
                 screen_size,
             ).to_physical_precise_round(output_scale);
