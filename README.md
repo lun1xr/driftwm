@@ -2,14 +2,7 @@
 
 A trackpad-first infinite canvas Wayland compositor.
 
-<!--
-  Hero video (~10s, one continuous take, no cuts):
-  1. Start with 3-4 windows visible at zoom 1.0 (terminal, browser, something colorful)
-  2. 3-finger swipe to pan across the canvas — show more windows off-screen
-  3. Pinch out to zoom out, revealing the full layout scattered across the canvas
-  4. 4-finger swipe to jump to a distant window
-  5. End centered on that window at zoom 1.0
--->
+https://github.com/malbiruk/driftwm/raw/main/assets/demo.mp4
 
 Traditional window managers arrange windows to fit your screen. driftwm flips this: windows float on an infinite 2D canvas and you move the viewport around them. Designed with laptops in mind — trackpad support keeps getting better while display size stays limited, so treating your screen as a camera onto a larger canvas makes sense. Pan, zoom, and navigate with trackpad gestures. No workspaces, no tiling — just drift.
 
