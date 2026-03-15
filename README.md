@@ -26,12 +26,7 @@ multiple viewports on the same canvas.
 
 ### Pan & zoom
 
-<!--
-  Video (~8s):
-  1. 3-finger swipe to pan across canvas with several windows
-  2. Pinch to zoom out, showing the full scattered layout
-  3. Pinch back in to zoom 1.0
--->
+https://github.com/user-attachments/assets/a5f14739-7762-4515-abb1-0de6990de4a3
 
 Infinite 2D canvas with viewport panning, zoom, and scroll momentum. A quick
 flick carries the viewport smoothly until friction stops it.
@@ -50,13 +45,7 @@ flick carries the viewport smoothly until friction stops it.
 
 ### Window navigation
 
-<!--
-  Video (~8s):
-  1. 4-finger swipe right to jump to a window
-  2. 4-finger swipe up to jump to another
-  3. Alt-Tab to cycle back
-  4. 4-finger pinch-in to zoom-to-fit overview
--->
+https://github.com/user-attachments/assets/a3f438e0-1798-49c5-a645-6717a1cd9f99
 
 Jump to the nearest window in any direction via cone search. MRU cycling
 (`Alt-Tab`) with hold-to-commit. Zoom-to-fit shows all windows at once.
@@ -79,15 +68,7 @@ trackpads.
 
 ### Move, resize, maximize
 
-<!--
-  Video (~15s):
-  1. 3-finger doubletap-swipe to move a window — show it snapping to another window's edge
-  2. Drag window to viewport edge — show auto-pan kicking in
-  3. While still dragging, hit Mod+1 to jump to a bookmark — held window comes along
-  4. Alt+3-finger swipe to resize
-  5. Mod+M to fit-window (maximize), then Mod+M again to restore
-  6. Mod+F for fullscreen, Mod+F to exit
--->
+https://github.com/user-attachments/assets/363d7252-dc28-4cf0-9c30-b7ca2e617972
 
 Move windows by doubletap-swiping on them. Resize with `Alt` + 3-finger swipe.
 Windows snap to nearby edges magnetically during drag. Drag to the viewport
@@ -116,12 +97,7 @@ action (launching an app, navigating) naturally exits it.
 
 ### Canvas background
 
-<!--
-  Video (~12s):
-  1. Pan across the canvas showing shader wallpaper scrolling with the viewport
-  2. Zoom out to show the background scales consistently with windows
-  3. Hot-reload config to cycle through several shaders and a tiled image
--->
+https://github.com/user-attachments/assets/9064883c-86ea-4db6-a40a-0418d2ee2f5e
 
 The background is part of the canvas — it scrolls and zooms with the viewport,
 not stuck to the screen. This gives spatial awareness when panning.
@@ -138,13 +114,7 @@ shader_path = "~/.config/driftwm/bg.glsl"    # custom shader
 
 ### Window rules
 
-<!--
-  Video (~10s):
-  1. Show two frosted-glass terminals overlapping (blur on blur works)
-  2. Show notification panel with blur
-  3. Show borderless widgets pinned on the canvas (clock, stats)
-  4. Show a forced-SSD window with title bar
--->
+https://github.com/user-attachments/assets/16404327-9226-48a4-8443-23917b6c849b
 
 Match windows by `app_id` and/or `title` (glob patterns) and control
 everything: position, size, decoration mode, blur, opacity, and widget
