@@ -1,6 +1,9 @@
-# driftwm
-
-A trackpad-first infinite canvas Wayland compositor.
+<h1 align="center"><img alt="driftwm" src="assets/logo.jpg"></h1>
+<p align="center">A trackpad-first infinite canvas Wayland compositor.</p>
+<p align="center">
+    <a href="https://github.com/malbiruk/driftwm/blob/main/LICENSE"><img alt="GitHub License" src="https://img.shields.io/github/license/malbiruk/driftwm"></a>
+    <a href="https://github.com/malbiruk/driftwm/releases"><img alt="GitHub Release" src="https://img.shields.io/github/v/release/malbiruk/driftwm?logo=github"></a>
+</p>
 
 https://github.com/user-attachments/assets/df24e442-6ad0-4520-9491-cb666da06d05
 
