@@ -29,7 +29,7 @@ bg_color = "#FDF6E3"
 fg_color = "#5C6A72"
 
 [background]
-shader_path = "~/Documents/work/scripts/driftwm/extras/wallpapers/pink_cloud.glsl"
+shader_path = "/usr/local/share/driftwm/wallpapers/pink_cloud.glsl"
 
 [output.outline]
 color="#FDF6E3"
