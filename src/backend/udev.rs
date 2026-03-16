@@ -347,6 +347,7 @@ pub fn init_udev(
                     crtc,
                 );
             }
+            _ => {}
         }
     }
 
