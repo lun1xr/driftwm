@@ -11,9 +11,8 @@ use smithay::{
         calloop::{LoopHandle, LoopSignal},
         wayland_protocols::xdg::shell::server::xdg_toplevel,
         wayland_server::{
-            DisplayHandle,
+            DisplayHandle, Resource,
             backend::{ClientData, ClientId, DisconnectReason},
-            Resource,
             protocol::wl_surface::WlSurface,
         },
     },
@@ -32,6 +31,13 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::Instant;
 
 use smithay::backend::allocator::Fourcc;
+use smithay::backend::renderer::damage::OutputDamageTracker;
+use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
+use smithay::backend::renderer::gles::{
+    GlesPixelProgram, GlesTexProgram, GlesTexture, element::PixelShaderElement,
+};
+use smithay::utils::{Physical, Transform};
+use smithay::wayland::content_type::ContentTypeState;
 use smithay::wayland::dmabuf::{DmabufGlobal, DmabufState};
 use smithay::wayland::fractional_scale::FractionalScaleManagerState;
 use smithay::wayland::idle_inhibit::IdleInhibitManagerState;
@@ -40,27 +46,22 @@ use smithay::wayland::keyboard_shortcuts_inhibit::KeyboardShortcutsInhibitState;
 use smithay::wayland::pointer_constraints::PointerConstraintsState;
 use smithay::wayland::pointer_gestures::PointerGesturesState;
 use smithay::wayland::presentation::PresentationState;
-use smithay::wayland::single_pixel_buffer::SinglePixelBufferState;
-use smithay::wayland::session_lock::{LockSurface, SessionLockManagerState, SessionLocker};
-use smithay::wayland::shell::wlr_layer::WlrLayerShellState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::selection::primary_selection::PrimarySelectionState;
 use smithay::wayland::selection::wlr_data_control::DataControlState;
-use smithay::wayland::viewporter::ViewporterState;
+use smithay::wayland::session_lock::{LockSurface, SessionLockManagerState, SessionLocker};
+use smithay::wayland::shell::wlr_layer::WlrLayerShellState;
 use smithay::wayland::shell::xdg::decoration::XdgDecorationState;
+use smithay::wayland::single_pixel_buffer::SinglePixelBufferState;
+use smithay::wayland::viewporter::ViewporterState;
 use smithay::wayland::xdg_activation::XdgActivationState;
 use smithay::wayland::xdg_foreign::XdgForeignState;
-use smithay::wayland::content_type::ContentTypeState;
-use smithay::backend::renderer::element::memory::MemoryRenderBuffer;
-use smithay::backend::renderer::damage::OutputDamageTracker;
-use smithay::backend::renderer::gles::{GlesPixelProgram, GlesTexProgram, GlesTexture, element::PixelShaderElement};
-use smithay::utils::{Physical, Transform};
 
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::xwayland_shell::XWaylandShellState;
-use smithay::xwayland::xwm::X11Wm;
 use smithay::xwayland::X11Surface;
+use smithay::xwayland::xwm::X11Wm;
 
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::reexports::drm::control::crtc;
@@ -146,7 +147,6 @@ pub fn spawn_command(cmd: &str) {
     log_err("spawn command", child.spawn());
 }
 
-
 /// Saved viewport state for HomeToggle return — includes optional fullscreen window.
 #[derive(Clone)]
 pub struct HomeReturn {
@@ -192,32 +192,35 @@ pub struct OutputState {
 }
 
 /// Initialize per-output state on a newly created output.
-pub fn init_output_state(output: &Output, camera: Point<f64, Logical>, friction: f64, layout_position: Point<i32, Logical>) {
+pub fn init_output_state(
+    output: &Output,
+    camera: Point<f64, Logical>,
+    friction: f64,
+    layout_position: Point<i32, Logical>,
+) {
     if output.user_data().get::<Mutex<OutputState>>().is_some() {
         tracing::warn!("OutputState already initialized for output, skipping");
         return;
     }
-    output
-        .user_data()
-        .insert_if_missing_threadsafe(|| {
-            Mutex::new(OutputState {
-                camera,
-                zoom: 1.0,
-                zoom_target: None,
-                zoom_animation_center: None,
-                last_rendered_zoom: f64::NAN,
-                overview_return: None,
-                camera_target: None,
-                last_scroll_pan: None,
-                momentum: MomentumState::new(friction),
-                panning: false,
-                edge_pan_velocity: None,
-                last_rendered_camera: Point::from((f64::NAN, f64::NAN)),
-                last_frame_instant: Instant::now(),
-                layout_position,
-                home_return: None,
-            })
-        });
+    output.user_data().insert_if_missing_threadsafe(|| {
+        Mutex::new(OutputState {
+            camera,
+            zoom: 1.0,
+            zoom_target: None,
+            zoom_animation_center: None,
+            last_rendered_zoom: f64::NAN,
+            overview_return: None,
+            camera_target: None,
+            last_scroll_pan: None,
+            momentum: MomentumState::new(friction),
+            panning: false,
+            edge_pan_velocity: None,
+            last_rendered_camera: Point::from((f64::NAN, f64::NAN)),
+            last_frame_instant: Instant::now(),
+            layout_position,
+            home_return: None,
+        })
+    });
 }
 
 /// Logical output size accounting for transform (90°/270° swap width/height).
@@ -274,7 +277,10 @@ pub struct DriftWm {
     // -- global: backend --
     pub backend: Option<Backend>,
     // -- global: SSD decorations --
-    pub decorations: HashMap<smithay::reexports::wayland_server::backend::ObjectId, crate::decorations::WindowDecoration>,
+    pub decorations: HashMap<
+        smithay::reexports::wayland_server::backend::ObjectId,
+        crate::decorations::WindowDecoration,
+    >,
     pub pending_ssd: HashSet<smithay::reexports::wayland_server::backend::ObjectId>,
     // -- global: shaders (compiled once, shared across outputs) --
     pub shadow_shader: Option<GlesPixelProgram>,
@@ -284,9 +290,13 @@ pub struct DriftWm {
     pub blur_down_shader: Option<GlesTexProgram>,
     pub blur_up_shader: Option<GlesTexProgram>,
     pub blur_mask_shader: Option<GlesTexProgram>,
-    pub blur_cache: HashMap<smithay::reexports::wayland_server::backend::ObjectId, crate::render::BlurCache>,
+    pub blur_cache:
+        HashMap<smithay::reexports::wayland_server::backend::ObjectId, crate::render::BlurCache>,
     /// Cached full-output FBO for blur behind-content rendering — reused if output size matches.
-    pub blur_bg_fbo: Option<(smithay::backend::renderer::gles::GlesTexture, Size<i32, smithay::utils::Physical>)>,
+    pub blur_bg_fbo: Option<(
+        smithay::backend::renderer::gles::GlesTexture,
+        Size<i32, smithay::utils::Physical>,
+    )>,
     /// Generation counter for blur cache invalidation — bumped on scene-affecting changes.
     pub blur_scene_generation: u64,
     /// Structural generation — bumped on move/z-order changes.
@@ -296,7 +306,10 @@ pub struct DriftWm {
     /// but canvas windows don't (same canvas content behind them regardless of camera).
     pub blur_camera_generation: u64,
     // -- global: cached CSD shadows (for corner-clipped CSD windows) --
-    pub csd_shadows: HashMap<smithay::reexports::wayland_server::backend::ObjectId, (PixelShaderElement, (i32, i32))>,
+    pub csd_shadows: HashMap<
+        smithay::reexports::wayland_server::backend::ObjectId,
+        (PixelShaderElement, (i32, i32)),
+    >,
     // -- per-output: cached render elements (!Send, stays on DriftWm) --
     pub cached_bg_elements: HashMap<String, PixelShaderElement>,
     // -- per-output: persistent capture state for screen recording --
@@ -337,7 +350,8 @@ pub struct DriftWm {
     pub output_management_state: driftwm::protocols::output_management::OutputManagementState,
     pub pending_screencopies: Vec<driftwm::protocols::screencopy::Screencopy>,
     #[allow(dead_code)]
-    pub image_capture_source_state: driftwm::protocols::image_capture_source::ImageCaptureSourceState,
+    pub image_capture_source_state:
+        driftwm::protocols::image_capture_source::ImageCaptureSourceState,
     pub image_copy_capture_state: driftwm::protocols::image_copy_capture::ImageCopyCaptureState,
     pub pending_captures: Vec<driftwm::protocols::image_copy_capture::PendingCapture>,
     pub xdg_foreign_state: XdgForeignState,
@@ -430,7 +444,10 @@ pub struct DriftWm {
     pub xwayland_client: Option<smithay::reexports::wayland_server::Client>,
 
     // -- global: SSD title bar double-click --
-    pub last_titlebar_click: Option<(Instant, smithay::reexports::wayland_server::backend::ObjectId)>,
+    pub last_titlebar_click: Option<(
+        Instant,
+        smithay::reexports::wayland_server::backend::ObjectId,
+    )>,
 }
 
 /// Per-client state stored by wayland-server for each connected client.
@@ -453,7 +470,10 @@ impl DriftWm {
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new_with_capabilities::<Self>(
             &dh,
-            [xdg_toplevel::WmCapabilities::Fullscreen, xdg_toplevel::WmCapabilities::Maximize],
+            [
+                xdg_toplevel::WmCapabilities::Fullscreen,
+                xdg_toplevel::WmCapabilities::Maximize,
+            ],
         );
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
@@ -478,15 +498,27 @@ impl DriftWm {
         let decoration_state = XdgDecorationState::new::<Self>(&dh);
         let layer_shell_state = WlrLayerShellState::new::<Self>(&dh);
         let foreign_toplevel_state =
-            driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState::new::<Self, _>(&dh, |_| true);
+            driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState::new::<Self, _>(
+                &dh,
+                |_| true,
+            );
         let screencopy_state =
             driftwm::protocols::screencopy::ScreencopyManagerState::new::<Self, _>(&dh, |_| true);
         let image_capture_source_state =
-            driftwm::protocols::image_capture_source::ImageCaptureSourceState::new::<Self, _>(&dh, |_| true);
+            driftwm::protocols::image_capture_source::ImageCaptureSourceState::new::<Self, _>(
+                &dh,
+                |_| true,
+            );
         let image_copy_capture_state =
-            driftwm::protocols::image_copy_capture::ImageCopyCaptureState::new::<Self, _>(&dh, |_| true);
+            driftwm::protocols::image_copy_capture::ImageCopyCaptureState::new::<Self, _>(
+                &dh,
+                |_| true,
+            );
         let output_management_state =
-            driftwm::protocols::output_management::OutputManagementState::new::<Self, _>(&dh, |_| true);
+            driftwm::protocols::output_management::OutputManagementState::new::<Self, _>(
+                &dh,
+                |_| true,
+            );
         let session_lock_manager_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
         let xdg_foreign_state = XdgForeignState::new::<Self>(&dh);
@@ -507,7 +539,11 @@ impl DriftWm {
         let xkb = XkbConfig {
             layout: &kb.layout,
             variant: &kb.variant,
-            options: if kb.options.is_empty() { None } else { Some(kb.options.clone()) },
+            options: if kb.options.is_empty() {
+                None
+            } else {
+                Some(kb.options.clone())
+            },
             model: &kb.model,
             ..Default::default()
         };
@@ -633,7 +669,8 @@ impl DriftWm {
             .space
             .elements()
             .filter(|w| {
-                !w.wl_surface().and_then(|s| driftwm::config::applied_rule(&s))
+                !w.wl_surface()
+                    .and_then(|s| driftwm::config::applied_rule(&s))
                     .is_some_and(|r| r.widget)
             })
             .cloned()
@@ -673,25 +710,26 @@ impl DriftWm {
     /// Capped at 10 iterations to guard against circular parents.
     pub fn topmost_modal_child(&self, window: &Window) -> Option<Window> {
         let parent_surface = window.wl_surface()?;
-        let child = self.space
+        let child = self
+            .space
             .elements()
-            .rfind(|w| {
-                w.parent_surface().as_ref() == Some(&*parent_surface) && w.is_modal()
-            })
+            .rfind(|w| w.parent_surface().as_ref() == Some(&*parent_surface) && w.is_modal())
             .cloned()?;
         self.topmost_modal_child_inner(&child, 9).or(Some(child))
     }
 
     fn topmost_modal_child_inner(&self, window: &Window, depth: u8) -> Option<Window> {
-        if depth == 0 { return None; }
+        if depth == 0 {
+            return None;
+        }
         let parent_surface = window.wl_surface()?;
-        let child = self.space
+        let child = self
+            .space
             .elements()
-            .rfind(|w| {
-                w.parent_surface().as_ref() == Some(&*parent_surface) && w.is_modal()
-            })
+            .rfind(|w| w.parent_surface().as_ref() == Some(&*parent_surface) && w.is_modal())
             .cloned()?;
-        self.topmost_modal_child_inner(&child, depth - 1).or(Some(child))
+        self.topmost_modal_child_inner(&child, depth - 1)
+            .or(Some(child))
     }
 
     /// Raise a window and set keyboard focus, with modal focus redirect.
@@ -712,7 +750,10 @@ impl DriftWm {
 
     /// Find a mapped window wrapping the given X11 surface.
     pub fn find_x11_window(&self, x11: &X11Surface) -> Option<Window> {
-        self.space.elements().find(|w| w.x11_surface() == Some(x11)).cloned()
+        self.space
+            .elements()
+            .find(|w| w.x11_surface() == Some(x11))
+            .cloned()
     }
 
     /// Find the X11Surface whose underlying wl_surface matches the given one.
@@ -731,9 +772,10 @@ impl DriftWm {
 
         if let Some(parent_id) = or_surface.is_transient_for() {
             // Search managed windows in Space for parent
-            let parent_in_space = self.space.elements().find(|w| {
-                w.x11_surface().is_some_and(|x| x.window_id() == parent_id)
-            });
+            let parent_in_space = self
+                .space
+                .elements()
+                .find(|w| w.x11_surface().is_some_and(|x| x.window_id() == parent_id));
             if let Some(parent_win) = parent_in_space {
                 let parent_canvas = self.space.element_location(parent_win).unwrap_or_default();
                 let parent_x11_loc = parent_win.x11_surface().unwrap().geometry().loc;
@@ -747,13 +789,16 @@ impl DriftWm {
                 target_id: u32,
                 depth: u32,
             ) -> Option<Point<i32, Logical>> {
-                if depth == 0 { return None; }
+                if depth == 0 {
+                    return None;
+                }
                 let parent_or = or_list.iter().find(|w| w.window_id() == target_id)?;
                 let parent_geo = parent_or.geometry();
                 if let Some(grandparent_id) = parent_or.is_transient_for() {
                     // Check Space first
                     let gp_in_space = space.elements().find(|w| {
-                        w.x11_surface().is_some_and(|x| x.window_id() == grandparent_id)
+                        w.x11_surface()
+                            .is_some_and(|x| x.window_id() == grandparent_id)
                     });
                     if let Some(gp_win) = gp_in_space {
                         let gp_canvas = space.element_location(gp_win).unwrap_or_default();
@@ -762,18 +807,25 @@ impl DriftWm {
                     }
                     // Recurse into OR list
                     let gp_canvas = find_or_parent(or_list, space, grandparent_id, depth - 1)?;
-                    return Some(gp_canvas + (parent_geo.loc - or_list.iter()
-                        .find(|w| w.window_id() == grandparent_id)
-                        .map(|w| w.geometry().loc)
-                        .unwrap_or_default()));
+                    return Some(
+                        gp_canvas
+                            + (parent_geo.loc
+                                - or_list
+                                    .iter()
+                                    .find(|w| w.window_id() == grandparent_id)
+                                    .map(|w| w.geometry().loc)
+                                    .unwrap_or_default()),
+                    );
                 }
                 None
             }
 
-            if let Some(parent_canvas) = find_or_parent(
-                &self.x11_override_redirect, &self.space, parent_id, 10,
-            ) {
-                let parent_or = self.x11_override_redirect.iter()
+            if let Some(parent_canvas) =
+                find_or_parent(&self.x11_override_redirect, &self.space, parent_id, 10)
+            {
+                let parent_or = self
+                    .x11_override_redirect
+                    .iter()
                     .find(|w| w.window_id() == parent_id);
                 let parent_x11_loc = parent_or.map(|w| w.geometry().loc).unwrap_or_default();
                 return parent_canvas + (or_geo.loc - parent_x11_loc);
@@ -814,7 +866,8 @@ impl DriftWm {
     /// Remove all capture state entries for a given output name.
     /// Keys are prefixed ("sc:{name}", "cap:{name}") so we retain non-matching.
     pub fn remove_capture_state(&mut self, output_name: &str) {
-        self.capture_state.retain(|k, _| !k.ends_with(&format!(":{output_name}")));
+        self.capture_state
+            .retain(|k, _| !k.ends_with(&format!(":{output_name}")));
     }
 
     /// True if the current cursor is an animated xcursor (multiple frames with delays).
@@ -841,7 +894,9 @@ impl DriftWm {
     /// True if any animation is still in progress and needs continued rendering.
     #[allow(dead_code)]
     pub fn has_active_animations(&self) -> bool {
-        self.space.outputs().any(|o| self.output_has_active_animations(o))
+        self.space
+            .outputs()
+            .any(|o| self.output_has_active_animations(o))
             || self.held_action.is_some()
             || self.exec_cursor_show_at.is_some()
             || self.exec_cursor_deadline.is_some()
@@ -895,8 +950,7 @@ impl DriftWm {
 
     /// Get the fullscreen state for the active output (if any).
     pub fn active_fullscreen(&self) -> Option<&FullscreenState> {
-        self.active_output()
-            .and_then(|o| self.fullscreen.get(&o))
+        self.active_output().and_then(|o| self.fullscreen.get(&o))
     }
 
     /// Check if the active output is in fullscreen mode.
@@ -920,20 +974,27 @@ impl DriftWm {
             loc.y as f64 + geo.size.h as f64 / 2.0,
         ));
         // Find which output's visible canvas rect contains the window center.
-        let found = self.space.outputs().find(|output| {
-            let os = output_state(output);
-            let size = output_logical_size(output);
-            let visible = driftwm::canvas::visible_canvas_rect(
-                os.camera.to_i32_round(), size, os.zoom,
-            );
-            drop(os);
-            visible.contains(Point::from((center.x as i32, center.y as i32)))
-        }).cloned();
+        let found = self
+            .space
+            .outputs()
+            .find(|output| {
+                let os = output_state(output);
+                let size = output_logical_size(output);
+                let visible =
+                    driftwm::canvas::visible_canvas_rect(os.camera.to_i32_round(), size, os.zoom);
+                drop(os);
+                visible.contains(Point::from((center.x as i32, center.y as i32)))
+            })
+            .cloned();
         found.or_else(|| self.active_output())
     }
 
     /// Find the nearest output in the given direction from `from`.
-    pub fn output_in_direction(&self, from: &Output, dir: &driftwm::config::Direction) -> Option<Output> {
+    pub fn output_in_direction(
+        &self,
+        from: &Output,
+        dir: &driftwm::config::Direction,
+    ) -> Option<Output> {
         let from_center: Point<f64, Logical> = {
             let os = output_state(from);
             let size = output_logical_size(from);
@@ -944,7 +1005,8 @@ impl DriftWm {
         };
         let (dx, dy) = dir.to_unit_vec();
 
-        self.space.outputs()
+        self.space
+            .outputs()
             .filter(|o| *o != from)
             .filter_map(|o| {
                 let os = output_state(o);
@@ -957,7 +1019,9 @@ impl DriftWm {
                 let to_x = center.x - from_center.x;
                 let to_y = center.y - from_center.y;
                 let dist = (to_x * to_x + to_y * to_y).sqrt();
-                if dist < 1.0 { return None; }
+                if dist < 1.0 {
+                    return None;
+                }
                 // Check alignment with direction (dot product > 0.5 = within ~60°)
                 let dot = (to_x * dx + to_y * dy) / dist;
                 if dot > 0.5 {
@@ -973,16 +1037,19 @@ impl DriftWm {
     /// Find which output's layout rectangle contains `pos` in layout space.
     /// Uses `layout_position` + output mode size (NOT `space.output_geometry()`).
     pub fn output_at_layout_pos(&self, pos: Point<f64, Logical>) -> Option<Output> {
-        self.space.outputs().find(|output| {
-            let os = output_state(output);
-            let lp = os.layout_position;
-            drop(os);
-            let size = output_logical_size(output);
-            pos.x >= lp.x as f64
-                && pos.x < (lp.x + size.w) as f64
-                && pos.y >= lp.y as f64
-                && pos.y < (lp.y + size.h) as f64
-        }).cloned()
+        self.space
+            .outputs()
+            .find(|output| {
+                let os = output_state(output);
+                let lp = os.layout_position;
+                drop(os);
+                let size = output_logical_size(output);
+                pos.x >= lp.x as f64
+                    && pos.x < (lp.x + size.w) as f64
+                    && pos.y >= lp.y as f64
+                    && pos.y < (lp.y + size.h) as f64
+            })
+            .cloned()
     }
 
     /// Convert canvas position to layout position via an output's camera/zoom.
@@ -996,7 +1063,8 @@ impl DriftWm {
             driftwm::canvas::CanvasPos(canvas_pos),
             os.camera,
             os.zoom,
-        ).0;
+        )
+        .0;
         Point::from((
             screen.x + os.layout_position.x as f64,
             screen.y + os.layout_position.y as f64,
@@ -1014,11 +1082,7 @@ impl DriftWm {
             layout_pos.x - os.layout_position.x as f64,
             layout_pos.y - os.layout_position.y as f64,
         ));
-        driftwm::canvas::screen_to_canvas(
-            driftwm::canvas::ScreenPos(screen),
-            os.camera,
-            os.zoom,
-        ).0
+        driftwm::canvas::screen_to_canvas(driftwm::canvas::ScreenPos(screen), os.camera, os.zoom).0
     }
 
     /// Batch-access per-output state under a single mutex lock.
@@ -1155,7 +1219,9 @@ impl DriftWm {
             }
         }
         let window_count = self.space.elements().count();
-        let layer_count: usize = self.space.outputs()
+        let layer_count: usize = self
+            .space
+            .outputs()
             .map(|o| smithay::desktop::layer_map_for_output(o).layers().count())
             .sum();
         let windows_dirty = window_count != self.state_file_window_count
@@ -1173,7 +1239,8 @@ impl DriftWm {
         self.state_file_layer_count = layer_count;
         for output in self.space.outputs() {
             let os = output_state(output);
-            self.state_file_cameras.insert(output.name(), (os.camera, os.zoom));
+            self.state_file_cameras
+                .insert(output.name(), (os.camera, os.zoom));
         }
         self.state_file_layout = self.active_layout.clone();
         self.state_file_last_write = Instant::now();
@@ -1192,10 +1259,15 @@ impl DriftWm {
         }
         let path = dir.join("state");
         let tmp = dir.join("state.tmp");
-        let mut content = format!("x={cx:.0}\ny={cy:.0}\nzoom={z:.3}\nlayout={}\n", self.active_layout);
+        let mut content = format!(
+            "x={cx:.0}\ny={cy:.0}\nzoom={z:.3}\nlayout={}\n",
+            self.active_layout
+        );
 
         {
-            let home_return = output_state(&self.active_output().unwrap()).home_return.clone();
+            let home_return = output_state(&self.active_output().unwrap())
+                .home_return
+                .clone();
             if let Some(ref ret) = home_return {
                 let sz = ret.zoom;
                 let sx = ret.camera.x + vp.w as f64 / (2.0 * sz);
@@ -1209,14 +1281,17 @@ impl DriftWm {
         let focused_surface = self.seat.get_keyboard().and_then(|kb| kb.current_focus());
         let mut app_ids: Vec<String> = Vec::new();
         for window in self.space.elements() {
-            let Some(surface) = window.wl_surface() else { continue; };
+            let Some(surface) = window.wl_surface() else {
+                continue;
+            };
             let mut app_id = smithay::wayland::compositor::with_states(&surface, |states| {
                 states
                     .data_map
                     .get::<smithay::wayland::shell::xdg::XdgToplevelSurfaceData>()
                     .and_then(|d| d.lock().ok())
                     .and_then(|guard| guard.app_id.clone())
-            }).unwrap_or_default();
+            })
+            .unwrap_or_default();
             if app_id.is_empty()
                 && let Some(x11) = window.x11_surface()
             {
@@ -1271,7 +1346,10 @@ impl DriftWm {
         let contents = match std::fs::read_to_string(&config_path) {
             Ok(c) => c,
             Err(e) => {
-                tracing::error!("Config reload: failed to read {}: {e}", config_path.display());
+                tracing::error!(
+                    "Config reload: failed to read {}: {e}",
+                    config_path.display()
+                );
                 return;
             }
         };
@@ -1289,7 +1367,11 @@ impl DriftWm {
             let xkb = XkbConfig {
                 layout: &kb.layout,
                 variant: &kb.variant,
-                options: if kb.options.is_empty() { None } else { Some(kb.options.clone()) },
+                options: if kb.options.is_empty() {
+                    None
+                } else {
+                    Some(kb.options.clone())
+                },
                 model: &kb.model,
                 ..Default::default()
             };
@@ -1316,7 +1398,7 @@ impl DriftWm {
             || new_config.repeat_delay != self.config.repeat_delay
         {
             let keyboard = self.seat.get_keyboard().unwrap();
-            keyboard.change_repeat_info(new_config.repeat_delay, new_config.repeat_rate);
+            keyboard.change_repeat_info(new_config.repeat_rate, new_config.repeat_delay);
         }
 
         // Momentum friction — apply to all outputs
@@ -1446,11 +1528,19 @@ impl DriftWm {
             }
 
             // Single frame or all delays zero → static cursor
-            let total_duration_ms =
-                if frames.len() == 1 || total_delay == 0 { 0 } else { total_delay };
+            let total_duration_ms = if frames.len() == 1 || total_delay == 0 {
+                0
+            } else {
+                total_delay
+            };
 
-            self.cursor_buffers
-                .insert(name.to_string(), CursorFrames { frames, total_duration_ms });
+            self.cursor_buffers.insert(
+                name.to_string(),
+                CursorFrames {
+                    frames,
+                    total_duration_ms,
+                },
+            );
         }
         self.cursor_buffers.get(name)
     }
@@ -1474,17 +1564,27 @@ pub fn remove_state_file() {
 /// Returns a map from output name to `(camera, zoom)`.
 pub fn read_all_per_output_state() -> HashMap<String, (Point<f64, Logical>, f64)> {
     let mut result = HashMap::new();
-    let Some(dir) = state_file_dir() else { return result };
-    let Ok(content) = std::fs::read_to_string(dir.join("state")) else { return result };
+    let Some(dir) = state_file_dir() else {
+        return result;
+    };
+    let Ok(content) = std::fs::read_to_string(dir.join("state")) else {
+        return result;
+    };
 
     // Parse lines like "outputs.eDP-1.camera_x=123.4"
     type Partial = (Option<f64>, Option<f64>, Option<f64>);
     let mut entries: HashMap<String, Partial> = HashMap::new();
     for line in content.lines() {
-        let Some(rest) = line.strip_prefix("outputs.") else { continue };
+        let Some(rest) = line.strip_prefix("outputs.") else {
+            continue;
+        };
         // rest = "eDP-1.camera_x=123.4"
-        let Some((name_and_key, val_str)) = rest.split_once('=') else { continue };
-        let Ok(val) = val_str.parse::<f64>() else { continue };
+        let Some((name_and_key, val_str)) = rest.split_once('=') else {
+            continue;
+        };
+        let Ok(val) = val_str.parse::<f64>() else {
+            continue;
+        };
         if let Some(name) = name_and_key.strip_suffix(".camera_x") {
             entries.entry(name.to_string()).or_default().0 = Some(val);
         } else if let Some(name) = name_and_key.strip_suffix(".camera_y") {
