@@ -386,7 +386,7 @@ impl Config {
             repeat_rate: raw.input.keyboard.repeat_rate.unwrap_or(25),
             edge_zone: raw.navigation.edge_pan.zone.unwrap_or(100.0),
             edge_pan_min: raw.navigation.edge_pan.speed_min.unwrap_or(4.0),
-            edge_pan_max: raw.navigation.edge_pan.speed_max.unwrap_or(20.0),
+            edge_pan_max: raw.navigation.edge_pan.speed_max.unwrap_or(10.0),
             animation_speed: raw.navigation.animation_speed.unwrap_or(0.3),
             cycle_modifier,
             zoom_step: raw.zoom.step.unwrap_or(1.1),

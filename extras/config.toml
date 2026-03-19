@@ -28,9 +28,6 @@ theme = "elementary"
 bg_color = "#FDF6E3"
 fg_color = "#5C6A72"
 
-[navigation.edge_pan]
-speed_max = 10.0
-
 [background]
 shader_path = "/usr/local/share/driftwm/wallpapers/pink_cloud.glsl"
 
