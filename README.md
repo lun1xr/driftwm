@@ -279,6 +279,7 @@ manager integration, select "driftwm" from the session menu.
 | `mod+m`            | Fit window (maximize/restore) |
 | `mod+f`            | Toggle fullscreen             |
 | `mod+c`            | Center focused window         |
+| `mod+x`            | Center window under cursor |
 | `mod+arrow`        | Jump to nearest window        |
 | `mod+a`            | Home toggle                   |
 | `mod+w`            | Zoom-to-fit (overview)        |
