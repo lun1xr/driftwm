@@ -237,6 +237,29 @@ pub fn init_udev(
                 .dmabuf_render_formats()
                 .iter()
                 .copied()
+                .filter(|f| {
+                    // Intel CCS modifiers increase display link bandwidth, which can
+                    // prevent high-res/high-refresh modes from working (e.g. ultrawides
+                    // that need DSC). Filter them out — the GPU falls back to
+                    // uncompressed framebuffers with no visual difference.
+                    let is_ccs = matches!(
+                        f.modifier,
+                        Modifier::I915_y_tiled_ccs
+                            | Modifier::I915_y_tiled_gen12_rc_ccs
+                            | Modifier::I915_y_tiled_gen12_mc_ccs
+                            // Yf_TILED_CCS
+                            | Modifier::Unrecognized(0x100000000000005)
+                            // Y_TILED_GEN12_RC_CCS_CC
+                            | Modifier::Unrecognized(0x100000000000008)
+                            // 4_TILED_DG2_RC_CCS
+                            | Modifier::Unrecognized(0x10000000000000a)
+                            // 4_TILED_DG2_MC_CCS
+                            | Modifier::Unrecognized(0x10000000000000b)
+                            // 4_TILED_DG2_RC_CCS_CC
+                            | Modifier::Unrecognized(0x10000000000000c)
+                    );
+                    !is_ccs
+                })
                 .collect();
             let renderer =
                 match unsafe { smithay::backend::renderer::gles::GlesRenderer::new(egl_context) } {
