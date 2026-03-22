@@ -45,8 +45,6 @@ trackpad gestures. No workspaces, no tiling — just drift.
   - `ext-idle-notify` — idle detection (swayidle, hypridle)
   - `wp_single_pixel_buffer` — 1x1 solid color buffers (GTK4 backgrounds/separators)
 
-  See `docs/protocol-plan.md` for the missing protocol roadmap.
-
 ## Core concept: infinite canvas
 
 The screen is a viewport onto an infinite 2D plane. Each window has absolute
@@ -716,7 +714,8 @@ src/
 │   ├── blur_up.glsl
 │   ├── corner_clip.glsl
 │   ├── dot_grid.glsl
-│   └── shadow.glsl
+│   ├── shadow.glsl
+│   └── tile_bg.glsl
 ├── backend/
 │   ├── mod.rs
 │   ├── winit.rs
@@ -725,7 +724,8 @@ src/
 │   ├── mod.rs
 │   ├── animation.rs
 │   ├── navigation.rs
-│   └── fullscreen.rs
+│   ├── fullscreen.rs
+│   └── fit.rs
 ├── config/
 │   ├── mod.rs
 │   ├── types.rs
