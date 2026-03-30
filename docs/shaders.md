@@ -84,11 +84,28 @@ void main() {
 
 ## Using a custom shader
 
-Set `shader_path` in config (milestone 9). Until then, edit the path in
-`src/config.rs`:
+Set `shader_path` under `[background]` in your config:
 
-```rust
-shader_path: Some("path/to/your/shader.glsl".into()),
+```toml
+[background]
+shader_path = "~/shaders/my_bg.glsl"
 ```
 
 Priority: `shader_path` > `tile_path` > built-in dot grid.
+
+## Reloading after edits
+
+The config is automatically reloaded when the file changes. The shader is
+re-read from disk on every reload, so touch the config to pick up shader
+edits:
+
+```bash
+touch ~/.config/driftwm/config.toml
+```
+
+To bind this to a key, add to your config:
+
+```toml
+[keybindings]
+"mod+shift+c" = "spawn touch ~/.config/driftwm/config.toml"
+```

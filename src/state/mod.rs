@@ -1464,13 +1464,12 @@ impl DriftWm {
             }
         }
 
-        // Background shader/tile — clear cached state for lazy re-init
-        if new_config.background != self.config.background {
-            self.background_shader = None;
-            self.cached_bg_elements.clear();
-            self.tile_shader = None;
-            self.cached_tile_bg.clear();
-        }
+        // Background shader/tile — always clear cached state so that editing
+        // the shader file on disk takes effect after `touch`ing the config.
+        self.background_shader = None;
+        self.cached_bg_elements.clear();
+        self.tile_shader = None;
+        self.cached_tile_bg.clear();
 
         // Cursor theme/size — validate theme before committing
         let theme_changed = new_config.cursor_theme != self.config.cursor_theme;
