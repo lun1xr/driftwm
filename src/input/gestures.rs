@@ -16,13 +16,15 @@ use smithay::{
         GestureSwipeUpdateEvent as WlSwipeUpdate, GrabStartData,
     },
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
+    reexports::wayland_server::Resource,
     utils::{Logical, Point, Size, SERIAL_COUNTER},
     wayland::{compositor::with_states, seat::WaylandFocus},
 };
 
 use crate::grabs::{MoveSurfaceGrab, ResizeState, has_bottom, has_left, has_right, has_top};
-use crate::state::{DriftWm, FocusTarget};
+use crate::state::{DriftWm, FocusTarget, output_state};
 use driftwm::canvas::{self, CanvasPos, canvas_to_screen};
+use driftwm::snap::{SnapRect, SnapState, snap_resize_edges};
 use driftwm::config::{
     Action, BindingContext, ContinuousAction, Direction, GestureConfigEntry, GestureTrigger,
     ThresholdAction,
@@ -44,6 +46,7 @@ pub enum GestureState {
         last_size: Size<i32, Logical>,
         cumulative: Point<f64, Logical>,
         last_x11_configure: Option<std::time::Instant>,
+        snap: SnapState,
     },
     /// Threshold swipe — accumulate delta, detect direction, fire once.
     SwipeThreshold {
@@ -340,11 +343,12 @@ impl DriftWm {
             GestureState::SwipeResize {
                 window,
                 edges,
+                initial_location,
                 initial_size,
                 last_size,
                 cumulative,
                 last_x11_configure,
-                ..
+                snap,
             } => {
                 // Force focused_output back if it drifted during resize
                 if let Some(ref output) = self.gesture_output
@@ -395,6 +399,54 @@ impl DriftWm {
                 }
                 new_w = new_w.max(1);
                 new_h = new_h.max(1);
+
+                if self.config.snap_enabled
+                    && let Some(ref output) = self.gesture_output
+                {
+                        let zoom = output_state(output).zoom;
+
+                        if let Some(self_surface) = window.wl_surface().map(|s| s.into_owned()) {
+                            let self_bar = if self.decorations.contains_key(&self_surface.id()) {
+                                driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT
+                            } else {
+                                0
+                            };
+
+                            let mut others: Vec<SnapRect> = Vec::new();
+                            for w in self.space.elements() {
+                                let Some(surface) = w.wl_surface() else { continue };
+                                if *surface == self_surface { continue }
+                                if driftwm::config::applied_rule(&surface).is_some_and(|r| r.widget) { continue }
+                                let Some(loc) = self.space.element_location(w) else { continue };
+                                let size = w.geometry().size;
+                                let bar = if self.decorations.contains_key(&surface.id()) {
+                                    driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT
+                                } else {
+                                    0
+                                };
+                                others.push(SnapRect {
+                                    x_low: loc.x as f64,
+                                    x_high: loc.x as f64 + size.w as f64,
+                                    y_low: loc.y as f64 - bar as f64,
+                                    y_high: loc.y as f64 + size.h as f64,
+                                });
+                            }
+
+                            snap_resize_edges(
+                                snap,
+                                *edges as u32,
+                                (initial_location.x, initial_location.y),
+                                (initial_size.w, initial_size.h),
+                                self_bar,
+                                &mut new_w, &mut new_h,
+                                &others, zoom,
+                                self.config.snap_gap,
+                                self.config.snap_distance,
+                                self.config.snap_break_force,
+                                self.config.snap_same_edge,
+                            );
+                        }
+                }
 
                 let new_size = Size::from((new_w, new_h));
                 if new_size != *last_size {
@@ -881,6 +933,7 @@ impl DriftWm {
             last_size: initial_size,
             cumulative: Point::from((0.0, 0.0)),
             last_x11_configure: None,
+            snap: SnapState::default(),
         });
     }
 

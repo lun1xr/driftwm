@@ -20,7 +20,7 @@ use smithay::input::pointer::CursorImageStatus;
 use crate::state::{DriftWm, output_state};
 use driftwm::canvas::{self, CanvasPos, canvas_to_screen};
 use driftwm::config;
-use driftwm::snap::{EdgeSnapParams, SnapRect, SnapState, update_edge};
+use driftwm::snap::{SnapRect, SnapState, snap_resize_edges};
 
 /// Tracks the resize lifecycle for a window. Stored in the surface data map
 /// (wrapped in `RefCell`) so that `compositor::commit()` can reposition
@@ -130,10 +130,6 @@ impl PointerGrab<DriftWm> for ResizeSurfaceGrab {
         // Snap active resize edges to nearby windows
         if data.config.snap_enabled {
             let zoom = output_state(&self.output).zoom;
-            let effective_distance = data.config.snap_distance / zoom;
-            let effective_break = data.config.snap_break_force / zoom;
-            let gap = data.config.snap_gap;
-            let same_edge = data.config.snap_same_edge;
 
             if let Some(self_surface) = self.window.wl_surface().map(|s| s.into_owned()) {
             let self_bar = if data.decorations.contains_key(&self_surface.id()) {
@@ -162,82 +158,21 @@ impl PointerGrab<DriftWm> for ResizeSurfaceGrab {
                 });
             }
 
-            let loc = self.initial_window_location;
-            let init_w = self.initial_window_size.w;
-            let init_h = self.initial_window_size.h;
-
-            // Compute the window's visual bounds at current resize state
-            let visual_top = if has_top(self.edges) {
-                loc.y as f64 + init_h as f64 - new_h as f64 - self_bar as f64
-            } else {
-                loc.y as f64 - self_bar as f64
-            };
-            let visual_bottom = if has_bottom(self.edges) {
-                loc.y as f64 + new_h as f64
-            } else {
-                loc.y as f64 + init_h as f64
-            };
-
-            // Horizontal edge snapping
-            if has_right(self.edges) {
-                let natural_right = loc.x as f64 + new_w as f64;
-                let hp = EdgeSnapParams {
-                    perp_low: visual_top, perp_high: visual_bottom,
-                    horizontal: true, same_edge, others: &others,
-                    gap, threshold: effective_distance, break_force: effective_break,
-                    high_edge: true,
-                };
-                let snapped = update_edge(
-                    &mut self.snap.x, &mut self.snap.cooldown_x, natural_right, &hp,
-                );
-                new_w = (snapped - loc.x as f64) as i32;
-            } else if has_left(self.edges) {
-                let fixed_right = loc.x as f64 + init_w as f64;
-                let natural_left = fixed_right - new_w as f64;
-                let hp = EdgeSnapParams {
-                    perp_low: visual_top, perp_high: visual_bottom,
-                    horizontal: true, same_edge, others: &others,
-                    gap, threshold: effective_distance, break_force: effective_break,
-                    high_edge: false,
-                };
-                let snapped = update_edge(
-                    &mut self.snap.x, &mut self.snap.cooldown_x, natural_left, &hp,
-                );
-                new_w = (fixed_right - snapped) as i32;
-            }
-
-            // Vertical edge snapping
-            if has_bottom(self.edges) {
-                let natural_bottom = loc.y as f64 + new_h as f64;
-                let vp = EdgeSnapParams {
-                    perp_low: loc.x as f64, perp_high: loc.x as f64 + new_w as f64,
-                    horizontal: false, same_edge, others: &others,
-                    gap, threshold: effective_distance, break_force: effective_break,
-                    high_edge: true,
-                };
-                let snapped = update_edge(
-                    &mut self.snap.y, &mut self.snap.cooldown_y, natural_bottom, &vp,
-                );
-                new_h = (snapped - loc.y as f64) as i32;
-            } else if has_top(self.edges) {
-                let fixed_bottom = loc.y as f64 + init_h as f64;
-                let natural_top = fixed_bottom - new_h as f64 - self_bar as f64;
-                let vp = EdgeSnapParams {
-                    perp_low: loc.x as f64, perp_high: loc.x as f64 + new_w as f64,
-                    horizontal: false, same_edge, others: &others,
-                    gap, threshold: effective_distance, break_force: effective_break,
-                    high_edge: false,
-                };
-                let snapped = update_edge(
-                    &mut self.snap.y, &mut self.snap.cooldown_y, natural_top, &vp,
-                );
-                new_h = (fixed_bottom - snapped - self_bar as f64) as i32;
-            }
+            snap_resize_edges(
+                &mut self.snap,
+                self.edges as u32,
+                (self.initial_window_location.x, self.initial_window_location.y),
+                (self.initial_window_size.w, self.initial_window_size.h),
+                self_bar,
+                &mut new_w, &mut new_h,
+                &others, zoom,
+                data.config.snap_gap,
+                data.config.snap_distance,
+                data.config.snap_break_force,
+                data.config.snap_same_edge,
+            );
 
             }  // if let Some(self_surface)
-
-            new_w = new_w.max(1);
-            new_h = new_h.max(1);
         }
 
         let new_size = Size::from((new_w, new_h));
