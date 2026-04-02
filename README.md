@@ -141,6 +141,9 @@ widget = true
 decoration = "none"
 ```
 
+> **Tip:** to find a window's `app_id`, check `$XDG_RUNTIME_DIR/driftwm/state` —
+> the `windows` field lists all open windows by their app ID.
+
 Consistent rounded corners and drop shadows across all CSD and SSD windows.
 SSD fallback for X11/XWayland apps — minimal title bar, close button,
 double-tap to maximize.
