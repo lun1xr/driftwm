@@ -49,6 +49,9 @@ color="#FDF6E3"
 "XF86MonBrightnessDown" = "spawn swayosd-client --brightness lower"
 "mod+s" = "exec ~/Documents/work/scripts/driftwm/extras/scripts/window-search.sh"
 
+[gestures.on-window]
+"alt+2-finger-pinch-in" = "close-window"
+
 [[outputs]]
 name = "HDMI-A-1"
 transform = "90"
