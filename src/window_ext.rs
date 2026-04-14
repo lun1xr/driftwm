@@ -102,7 +102,8 @@ impl WindowExt for Window {
             toplevel.send_configure();
         } else if let Some(x11) = self.x11_surface() {
             x11.set_fullscreen(false).ok();
-            x11.configure(Rectangle::new(x11.geometry().loc, saved_size)).ok();
+            x11.configure(Rectangle::new(x11.geometry().loc, saved_size))
+                .ok();
         }
     }
 
@@ -125,12 +126,13 @@ impl WindowExt for Window {
             use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
             toplevel.with_pending_state(|state| {
                 state.states.unset(xdg_toplevel::State::Maximized);
-                state.size = Some(saved_size);
+                state.size = None;
             });
             toplevel.send_configure();
         } else if let Some(x11) = self.x11_surface() {
             x11.set_maximized(false).ok();
-            x11.configure(Rectangle::new(x11.geometry().loc, saved_size)).ok();
+            x11.configure(Rectangle::new(x11.geometry().loc, saved_size))
+                .ok();
         }
     }
 
