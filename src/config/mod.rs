@@ -61,6 +61,11 @@ pub struct Config {
     pub zoom_step: f64,
     /// Padding (canvas pixels) around the bounding box for ZoomToFit.
     pub zoom_fit_padding: f64,
+    /// Animate zoom back to 1.0 when a new window is mapped (true) or preserve current zoom (false).
+    pub zoom_reset_on_new_window: bool,
+    /// Animate zoom back to 1.0 when an off-screen window requests activation
+    /// (xdg-activation or foreign-toplevel click) (true) or just pan to it at current zoom (false).
+    pub zoom_reset_on_activation: bool,
     pub snap_enabled: bool,
     pub snap_gap: f64,
     pub snap_distance: f64,
@@ -449,6 +454,8 @@ impl Config {
             cycle_modifier,
             zoom_step: raw.zoom.step.unwrap_or(1.1),
             zoom_fit_padding: raw.zoom.fit_padding.unwrap_or(100.0),
+            zoom_reset_on_new_window: raw.zoom.reset_on_new_window.unwrap_or(true),
+            zoom_reset_on_activation: raw.zoom.reset_on_activation.unwrap_or(true),
             snap_enabled: raw.snap.enabled.unwrap_or(true),
             snap_gap: raw.snap.gap.unwrap_or(12.0),
             snap_distance: raw.snap.distance.unwrap_or(24.0),

@@ -221,7 +221,7 @@ impl XdgActivationHandler for DriftWm {
                 let serial = smithay::utils::SERIAL_COUNTER.next_serial();
                 self.raise_and_focus(&window, serial);
             } else {
-                self.navigate_to_window(&window, true);
+                self.navigate_to_window(&window, self.config.zoom_reset_on_activation);
             }
         }
     }
@@ -443,7 +443,7 @@ impl ForeignToplevelHandler for DriftWm {
             .find(|w| w.wl_surface().as_deref() == Some(&wl_surface))
             .cloned();
         if let Some(window) = window {
-            self.navigate_to_window(&window, true);
+            self.navigate_to_window(&window, self.config.zoom_reset_on_activation);
         }
     }
 

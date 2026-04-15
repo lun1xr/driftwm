@@ -73,6 +73,11 @@
 [zoom]
 # step = 1.1                  # multiplier per keypress (1.1 = 10% per press)
 # fit_padding = 100.0         # canvas px padding for zoom-to-fit
+# reset_on_new_window = true  # animate zoom to 1.0 when a new window is mapped
+#                             # (false = keep current zoom, pan only)
+# reset_on_activation = true  # animate zoom to 1.0 when an off-screen window
+#                             # requests focus
+#                             # (false = keep current zoom, pan only)
 
 [snap]
 # enabled = true               # magnetic edge snapping during window drag

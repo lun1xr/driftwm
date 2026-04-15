@@ -396,7 +396,8 @@ impl XWaylandShellHandler for DriftWm {
             || !matches!(surface.window_type(), None | Some(WmWindowType::Normal));
         let should_focus = !is_child && rule.as_ref().is_none_or(|r| !r.widget);
         if should_focus {
-            self.navigate_to_window(&smithay_window, true);
+            let reset = self.config.zoom_reset_on_new_window;
+            self.navigate_to_window(&smithay_window, reset);
         } else {
             // Widget: refocus previous window if this stole focus
             self.focus_history.retain(|w| w != &smithay_window);

@@ -117,6 +117,8 @@ pub(super) struct EdgePanConfig {
 pub(super) struct ZoomConfig {
     pub step: Option<f64>,
     pub fit_padding: Option<f64>,
+    pub reset_on_new_window: Option<bool>,
+    pub reset_on_activation: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]

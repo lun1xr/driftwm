@@ -323,7 +323,8 @@ impl CompositorHandler for DriftWm {
                     if has_size {
                         let is_widget = rule.as_ref().is_some_and(|r| r.widget);
                         if !is_widget {
-                            self.navigate_to_window(&window, true);
+                            let reset = self.config.zoom_reset_on_new_window;
+                            self.navigate_to_window(&window, reset);
                         }
 
                         // Create SSD decorations if the window wants ServerSide mode

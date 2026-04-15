@@ -219,6 +219,25 @@ fn toml_scalar_overrides() {
 }
 
 #[test]
+fn toml_zoom_reset_policies_default_true() {
+    let config = Config::from_toml("").unwrap();
+    assert!(config.zoom_reset_on_new_window);
+    assert!(config.zoom_reset_on_activation);
+}
+
+#[test]
+fn toml_zoom_reset_policies_can_be_disabled_independently() {
+    let toml = r#"
+        [zoom]
+        reset_on_new_window = false
+        reset_on_activation = true
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    assert!(!config.zoom_reset_on_new_window);
+    assert!(config.zoom_reset_on_activation);
+}
+
+#[test]
 fn toml_new_navigation_fields_override_deprecated_scroll() {
     let toml = r#"
         [input.scroll]
