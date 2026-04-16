@@ -1218,8 +1218,7 @@ pub fn init_background(state: &mut crate::state::DriftWm, renderer: &mut GlesRen
             }
         };
         
-        // Detect if shader is animated (contains u_time)
-        state.render.background_is_animated = shader_source.contains("u_time");
+        state.render.background_is_animated = shader_source.contains("uniform float u_time");
         
         state.render.background_shader = Some(compiled.clone());
         compiled
@@ -1333,10 +1332,4 @@ pub fn post_render(state: &mut crate::state::DriftWm, output: &Output) {
     state.space.refresh();
     state.popups.cleanup();
     layer_map_for_output(output).cleanup();
-    
-    // Schedule continuous redraws for animated background shaders
-    // This ensures u_time updates even when there's no other damage
-    if state.render.background_is_animated {
-        state.mark_all_dirty();
-    }
 }

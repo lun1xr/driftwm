@@ -1,4 +1,4 @@
-// Animated wave shader example
+// Animated squares shader example
 // Available uniforms:
 // - u_camera: vec2 - camera position in canvas coordinates
 // - u_time: float - time in seconds since compositor start
@@ -16,7 +16,7 @@ void main() {
     vec2 canvas_pos = screen_pixel + u_camera;
     vec2 pos = canvas_pos / 100.0;
     
-    // Animated waves
+    // Animated squares
     float wave1 = sin(pos.x * 10.0 + u_time * 2.0) * 0.5 + 0.5;
     float wave2 = sin(pos.y * 10.0 + u_time * 1.5) * 0.5 + 0.5;
     
