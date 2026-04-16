@@ -67,6 +67,35 @@ with no window there — useful for areas with pinned widgets.
 All 4-finger navigation gestures also work as `Mod` + 3-finger for smaller
 trackpads.
 
+### Move, resize, maximize
+
+https://github.com/user-attachments/assets/363d7252-dc28-4cf0-9c30-b7ca2e617972
+
+Move windows by doubletap-swiping on them. Resize with `Alt` + 3-finger swipe.
+Windows snap to nearby edges magnetically during drag. Drag to the viewport
+edge and the canvas auto-pans — handy for rearranging windows just beyond the
+visible area.
+
+**Tip:** while dragging a window, keyboard shortcuts still work. Use `Mod+1-4`
+to jump to a bookmark or `Mod+A` to go home — your held window comes with you.
+
+Fit-window (`Mod+M`) is the maximize analogue — centers the viewport, resets
+zoom to 1.0, and resizes the window to fill the screen. Toggle again to
+restore. Fullscreen (`Mod+F`) is a viewport mode, not a window state — any canvas
+action (launching an app, navigating) naturally exits it.
+
+| Input                         | Action                        |
+| ----------------------------- | ----------------------------- |
+| 3-finger doubletap-swipe      | Move window                   |
+| `Alt` + LMB drag              | Move window                   |
+| `Alt` + 3-finger swipe        | Resize window                 |
+| `Alt` + RMB drag              | Resize window                 |
+| `Alt` + MMB click / `Mod+M`   | Fit window (maximize/restore) |
+| `Alt` + 2-finger pinch-in/out | Fit window                    |
+| `Alt` + 3-finger pinch-in/out | Toggle fullscreen             |
+| `Mod` + MMB click / `Mod+F`   | Toggle fullscreen             |
+| `Mod+Shift` + arrow           | Nudge window 20px             |
+
 ### Infinite background
 
 https://github.com/user-attachments/assets/9064883c-86ea-4db6-a40a-0418d2ee2f5e
@@ -132,35 +161,6 @@ windows teleport to the target viewport's canvas position.
 | Input             | Action                         |
 | ----------------- | ------------------------------ |
 | `Mod+Alt` + arrow | Send window to adjacent output |
-
-### Move, resize, maximize
-
-https://github.com/user-attachments/assets/363d7252-dc28-4cf0-9c30-b7ca2e617972
-
-Move windows by doubletap-swiping on them. Resize with `Alt` + 3-finger swipe.
-Windows snap to nearby edges magnetically during drag. Drag to the viewport
-edge and the canvas auto-pans — handy for rearranging windows just beyond the
-visible area.
-
-**Tip:** while dragging a window, keyboard shortcuts still work. Use `Mod+1-4`
-to jump to a bookmark or `Mod+A` to go home — your held window comes with you.
-
-Fit-window (`Mod+M`) is the maximize analogue — centers the viewport, resets
-zoom to 1.0, and resizes the window to fill the screen. Toggle again to
-restore. Fullscreen (`Mod+F`) is a viewport mode, not a window state — any canvas
-action (launching an app, navigating) naturally exits it.
-
-| Input                         | Action                        |
-| ----------------------------- | ----------------------------- |
-| 3-finger doubletap-swipe      | Move window                   |
-| `Alt` + LMB drag              | Move window                   |
-| `Alt` + 3-finger swipe        | Resize window                 |
-| `Alt` + RMB drag              | Resize window                 |
-| `Alt` + MMB click / `Mod+M`   | Fit window (maximize/restore) |
-| `Alt` + 2-finger pinch-in/out | Fit window                    |
-| `Alt` + 3-finger pinch-in/out | Toggle fullscreen             |
-| `Mod` + MMB click / `Mod+F`   | Toggle fullscreen             |
-| `Mod+Shift` + arrow           | Nudge window 20px             |
 
 
 ### Panels, docks & taskbars
