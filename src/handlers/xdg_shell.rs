@@ -174,6 +174,7 @@ impl XdgShellHandler for DriftWm {
         self.pending_ssd.remove(&wl_surface.id());
         self.pending_center.remove(&wl_surface);
         self.pending_size.remove(&wl_surface);
+        self.pending_recenter.remove(&wl_surface.id());
         // Collect first to avoid holding an immutable borrow on space
         let window = self
             .space

@@ -26,10 +26,17 @@ impl DriftWm {
         let viewport_size = self.get_viewport_size();
         let saved_location = self.space.element_location(window).unwrap_or_default();
 
-        let saved_size = window
-            .wl_surface()
-            .and_then(|s| super::fit::restore_size(&s))
-            .unwrap_or_else(|| window.geometry().size);
+        // If the window is fit, capture the fit-era geometry so exit_fullscreen
+        // restores it back to fit size with FitState still intact. Otherwise
+        // prefer RestoreSize over geometry to dodge Chromium's CSD shrink spiral.
+        let saved_size = if super::fit::is_fit(window) {
+            window.geometry().size
+        } else {
+            window
+                .wl_surface()
+                .and_then(|s| super::fit::restore_size(&s))
+                .unwrap_or_else(|| window.geometry().size)
+        };
 
         self.fullscreen.insert(output, FullscreenState {
             window: window.clone(),

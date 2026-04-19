@@ -450,6 +450,19 @@ impl ClientData for ClientState {
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
 }
 
+/// Restricted clients (those connecting through a security-context listener)
+/// are denied access to privileged protocols. Clients without a ClientState
+/// (e.g. XWayland's internal client, whose setup callback doesn't attach
+/// one) are treated as unrestricted since they are spawned by the
+/// compositor itself.
+pub(crate) fn client_is_unrestricted(
+    client: &smithay::reexports::wayland_server::Client,
+) -> bool {
+    client
+        .get_data::<ClientState>()
+        .is_none_or(|d| !d.is_restricted)
+}
+
 impl DriftWm {
     pub fn new(
         dh: DisplayHandle,
@@ -484,18 +497,6 @@ impl DriftWm {
         let relative_pointer_state = RelativePointerManagerState::new::<Self>(&dh);
         let _pointer_gestures_state = PointerGesturesState::new::<Self>(&dh);
         let keyboard_shortcuts_inhibit_state = KeyboardShortcutsInhibitState::new::<Self>(&dh);
-        // Restricted clients (those connecting through a security-context listener)
-        // are denied access to privileged protocols. Clients without a ClientState
-        // (e.g. XWayland's internal client, whose setup callback doesn't attach
-        // one) are treated as unrestricted since they are spawned by the
-        // compositor itself.
-        fn client_is_unrestricted(
-            client: &smithay::reexports::wayland_server::Client,
-        ) -> bool {
-            client
-                .get_data::<ClientState>()
-                .is_none_or(|d| !d.is_restricted)
-        }
         let security_context_state =
             SecurityContextState::new::<Self, _>(&dh, client_is_unrestricted);
         let virtual_keyboard_state =

@@ -337,7 +337,19 @@ impl KeyboardShortcutsInhibitHandler for DriftWm {
     }
 
     fn new_inhibitor(&mut self, inhibitor: KeyboardShortcutsInhibitor) {
-        inhibitor.activate();
+        // Smithay 0.7 has no per-client filter for this protocol, and the
+        // inhibitor is already registered before this callback fires. Refusing
+        // means leaving it inactive — the client gets a dead inhibitor resource
+        // and shortcuts continue to flow to the compositor.
+        let allowed = inhibitor
+            .wl_surface()
+            .client()
+            .as_ref()
+            .map(crate::state::client_is_unrestricted)
+            .unwrap_or(true);
+        if allowed {
+            inhibitor.activate();
+        }
     }
 
     fn inhibitor_destroyed(&mut self, _inhibitor: KeyboardShortcutsInhibitor) {}
