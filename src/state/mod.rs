@@ -618,7 +618,6 @@ impl DriftWm {
     /// Push any `below` windows to the bottom of the z-order.
     /// Called after every `raise_element()` to maintain stacking.
     pub fn enforce_below_windows(&mut self) {
-        self.render.blur_scene_generation += 1;
         self.render.blur_geometry_generation += 1;
         // Space stores elements in a vec where last = topmost.
         // raise_element pushes to the end (top). So we raise all

@@ -165,7 +165,6 @@ impl PointerGrab<DriftWm> for MoveSurfaceGrab {
         _focus: Option<(<DriftWm as SeatHandler>::PointerFocus, Point<f64, Logical>)>,
         event: &MotionEvent,
     ) {
-        data.render.blur_scene_generation += 1;
         data.render.blur_geometry_generation += 1;
 
         // Phase 3 input routing already converted event.location to the focused
