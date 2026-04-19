@@ -430,9 +430,10 @@ pub struct DriftWm {
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,
-    /// Clients connected via a security-context listener are restricted from
-    /// privileged protocols (virtual keyboard, etc.). See SecurityContextHandler.
-    pub restricted: bool,
+    /// Clients connected via a security-context listener are denied access to
+    /// privileged protocols (screencopy, foreign-toplevel, virtual keyboard,
+    /// etc.). See SecurityContextHandler.
+    pub is_restricted: bool,
 }
 
 impl ClientData for ClientState {
@@ -465,23 +466,26 @@ impl DriftWm {
         let xdg_activation_state = XdgActivationState::new::<Self>(&dh);
         SinglePixelBufferState::new::<Self>(&dh);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&dh);
-        let data_control_state =
-            DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
+        let data_control_state = DataControlState::new::<Self, _>(
+            &dh,
+            Some(&primary_selection_state),
+            client_is_unrestricted,
+        );
         let pointer_constraints_state = PointerConstraintsState::new::<Self>(&dh);
         let relative_pointer_state = RelativePointerManagerState::new::<Self>(&dh);
         let _pointer_gestures_state = PointerGesturesState::new::<Self>(&dh);
         let keyboard_shortcuts_inhibit_state = KeyboardShortcutsInhibitState::new::<Self>(&dh);
         // Restricted clients (those connecting through a security-context listener)
-        // are denied access to privileged protocols such as virtual keyboard.
-        // Clients without a ClientState (e.g. XWayland's internal client, whose
-        // setup callback doesn't attach one) are treated as unrestricted since
-        // they are spawned by the compositor itself.
+        // are denied access to privileged protocols. Clients without a ClientState
+        // (e.g. XWayland's internal client, whose setup callback doesn't attach
+        // one) are treated as unrestricted since they are spawned by the
+        // compositor itself.
         fn client_is_unrestricted(
             client: &smithay::reexports::wayland_server::Client,
         ) -> bool {
             client
                 .get_data::<ClientState>()
-                .map_or(true, |d| !d.restricted)
+                .is_none_or(|d| !d.is_restricted)
         }
         let security_context_state =
             SecurityContextState::new::<Self, _>(&dh, client_is_unrestricted);
@@ -491,30 +495,35 @@ impl DriftWm {
         let idle_notifier_state = IdleNotifierState::new(&dh, loop_handle.clone());
         let presentation_state = PresentationState::new::<Self>(&dh, 1); // CLOCK_MONOTONIC
         let decoration_state = XdgDecorationState::new::<Self>(&dh);
-        let layer_shell_state = WlrLayerShellState::new::<Self>(&dh);
+        let layer_shell_state =
+            WlrLayerShellState::new_with_filter::<Self, _>(&dh, client_is_unrestricted);
         let foreign_toplevel_state =
             driftwm::protocols::foreign_toplevel::ForeignToplevelManagerState::new::<Self, _>(
                 &dh,
-                |_| true,
+                client_is_unrestricted,
             );
         let screencopy_state =
-            driftwm::protocols::screencopy::ScreencopyManagerState::new::<Self, _>(&dh, |_| true);
+            driftwm::protocols::screencopy::ScreencopyManagerState::new::<Self, _>(
+                &dh,
+                client_is_unrestricted,
+            );
         let image_capture_source_state =
             driftwm::protocols::image_capture_source::ImageCaptureSourceState::new::<Self, _>(
                 &dh,
-                |_| true,
+                client_is_unrestricted,
             );
         let image_copy_capture_state =
             driftwm::protocols::image_copy_capture::ImageCopyCaptureState::new::<Self, _>(
                 &dh,
-                |_| true,
+                client_is_unrestricted,
             );
         let output_management_state =
             driftwm::protocols::output_management::OutputManagementState::new::<Self, _>(
                 &dh,
-                |_| true,
+                client_is_unrestricted,
             );
-        let session_lock_manager_state = SessionLockManagerState::new::<Self, _>(&dh, |_| true);
+        let session_lock_manager_state =
+            SessionLockManagerState::new::<Self, _>(&dh, client_is_unrestricted);
         let xwayland_shell_state = XWaylandShellState::new::<Self>(&dh);
         let xdg_foreign_state = XdgForeignState::new::<Self>(&dh);
         ContentTypeState::new::<Self>(&dh);
