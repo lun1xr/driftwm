@@ -555,16 +555,17 @@ fn push_corner_clipped_elements(
                 Some(g) => (g.loc.x as f32, g.loc.y as f32, g.size.w as f32, g.size.h as f32),
                 None => (0.0, 0.0, buf.w as f32, buf.h as f32),
             };
+            let clamped_radius = radius.min(gw.min(gh) * 0.5).max(0.0);
             let uniforms = vec![
                 Uniform::new("u_size", (buf.w as f32, buf.h as f32)),
                 Uniform::new("u_geo", (gx, gy, gw, gh)),
-                Uniform::new("u_radius", radius),
+                Uniform::new("u_radius", clamped_radius),
                 Uniform::new("u_scale", effective_scale),
                 Uniform::new("u_clip_top", clip_top),
                 Uniform::new("u_clip_shadow", clip_shadow),
             ];
             target.push(OutputRenderElements::CsdWindow(PixelSnapRescaleElement::from_element(
-                RoundedCornerElement::new(elem, shader.clone(), uniforms, radius as f64, clip_all_corners),
+                RoundedCornerElement::new(elem, shader.clone(), uniforms, clamped_radius as f64, clip_all_corners),
                 Point::<i32, Physical>::from((0, 0)),
                 zoom,
             )));

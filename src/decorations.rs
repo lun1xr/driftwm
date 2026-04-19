@@ -162,7 +162,7 @@ pub fn render_title_bar(
     let w = width.max(1);
     let bg = config.bg_color;
     let fg = config.fg_color;
-    let cr = config.corner_radius as f64;
+    let cr = (config.corner_radius as f64).min(w as f64 / 2.0).min(h as f64);
 
     let mut pixels = vec![0u8; (w * h * 4) as usize];
 
@@ -216,7 +216,8 @@ fn corner_alpha_at(x: i32, y: i32, w: i32, r: f64) -> f64 {
         let dx = r - px;
         let dy = r - py;
         let dist = (dx * dx + dy * dy).sqrt();
-        return (r - dist + 0.5).clamp(0.0, 1.0);
+        let t = (dist - r + 0.5).clamp(0.0, 1.0);
+        return 1.0 - t * t * (3.0 - 2.0 * t);
     }
     // Top-right corner
     let right_edge = w as f64;
@@ -224,7 +225,8 @@ fn corner_alpha_at(x: i32, y: i32, w: i32, r: f64) -> f64 {
         let dx = px - (right_edge - r);
         let dy = r - py;
         let dist = (dx * dx + dy * dy).sqrt();
-        return (r - dist + 0.5).clamp(0.0, 1.0);
+        let t = (dist - r + 0.5).clamp(0.0, 1.0);
+        return 1.0 - t * t * (3.0 - 2.0 * t);
     }
     1.0
 }

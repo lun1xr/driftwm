@@ -1,5 +1,5 @@
 //_DEFINES
-precision mediump float;
+precision highp float;
 varying vec2 v_coords;
 uniform sampler2D tex;
 uniform float alpha;
