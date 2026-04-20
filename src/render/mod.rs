@@ -681,16 +681,44 @@ pub fn compose_frame(
         let wants_blur = blur_enabled && applied.as_ref().is_some_and(|r| r.blur);
         let opacity = applied.as_ref().and_then(|r| r.opacity).unwrap_or(1.0);
 
-        let elems = window.render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
-            renderer,
-            render_loc.to_physical_precise_round(scale),
-            scale,
-            opacity as f32,
-        );
+        // Split elements: toplevel + subsurfaces get corner-clipped, popups
+        // don't (they can legitimately extend outside the parent's geometry —
+        // GTK menus, tooltips, autocomplete, etc). Mirrors niri/cosmic-comp;
+        // smithay's `Window::render_elements` bundles popups into one vec,
+        // which is why we can't use it directly for Wayland.
+        let loc_phys: Point<i32, Physical> = render_loc.to_physical_precise_round(scale);
+        let (elems, popup_elems) = if let Some(toplevel) = window.toplevel() {
+            let root = toplevel.wl_surface();
+            let top = smithay::backend::renderer::element::surface::render_elements_from_surface_tree::<
+                _, WaylandSurfaceRenderElement<GlesRenderer>,
+            >(renderer, root, loc_phys, scale, opacity as f32, Kind::Unspecified);
+
+            let mut popups: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = Vec::new();
+            for (popup, popup_offset) in smithay::desktop::PopupManager::popups_for_surface(root) {
+                let offset: Point<i32, Physical> = (window.geometry().loc + popup_offset - popup.geometry().loc)
+                    .to_physical_precise_round(scale);
+                popups.extend(smithay::backend::renderer::element::surface::render_elements_from_surface_tree::<
+                    _, WaylandSurfaceRenderElement<GlesRenderer>,
+                >(renderer, popup.wl_surface(), loc_phys + offset, scale, opacity as f32, Kind::Unspecified));
+            }
+            (top, popups)
+        } else {
+            // X11: no PopupManager-tracked popups. Override-redirect menus
+            // come through as separate windows in state.space and get their
+            // own loop iteration.
+            let elems = window.render_elements::<WaylandSurfaceRenderElement<GlesRenderer>>(
+                renderer, loc_phys, scale, opacity as f32,
+            );
+            (elems, Vec::new())
+        };
 
         let target = if is_widget { &mut zoomed_widgets } else { &mut zoomed_normal };
         let elem_start = target.len();
         let mut shadow_count = 0usize;
+
+        // Popups push FIRST (earlier-in-vec = on-top in smithay z-order),
+        // so they sit above the title bar and the clipped window content.
+        push_plain_elements(target, popup_elems, zoom);
 
         if has_ssd {
             let bar_height = driftwm::config::DecorationConfig::TITLE_BAR_HEIGHT;
