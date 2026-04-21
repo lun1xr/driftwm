@@ -799,6 +799,17 @@ impl DriftWm {
                     return Some((window.clone(), DecorationHit::ResizeBorder(edge)));
                 }
             }
+
+            // If this window's client surface covers pos, stop: a higher window's
+            // content occludes any lower window's decoration margin (mirrors
+            // surface_under's z-order semantics so cursor and click agree).
+            let surface_origin = loc - window.geometry().loc;
+            if window
+                .surface_under(pos - surface_origin.to_f64(), WindowSurfaceType::ALL)
+                .is_some()
+            {
+                return None;
+            }
         }
         None
     }
