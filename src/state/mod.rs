@@ -1057,14 +1057,27 @@ impl DriftWm {
             }
         }
 
-        // No transient_for: use anchor-based X11→canvas coordinate mapping.
-        // X11 OR windows position themselves in absolute root coords — find
-        // a managed X11 window as an anchor to translate. All X11 clients
-        // share one wl_client (XWayland), so we can't filter by wl_client.
-        // Instead, prefer the X11 window currently raised in XWayland's
-        // stack on hover — that's the window the pointer was over when the
-        // OR was created, and almost always the OR's actual creator. Fall
-        // back to the topmost X11 in compositor space if nothing was hovered.
+        // No transient_for: decide between cursor-pinned and managed-window
+        // anchoring by whether the OR's WM_CLASS matches any managed X11
+        // window. No match → OR-only app (jgmenu / dmenu-style), use the
+        // cursor-pinned `or_root_anchor`. Match → managed-app OR (Steam
+        // hover menus etc.), use `pick_anchor` with that window as anchor.
+        // All X11 clients share one wl_client so class is the best signal.
+        let or_class = or_surface.class();
+        let has_class_match = !or_class.is_empty()
+            && self.space.elements().any(|w| {
+                w.x11_surface().is_some_and(|x| x.class() == or_class)
+            });
+
+        if !has_class_match
+            && let Some(anchor) = self.or_root_anchor
+        {
+            return anchor + or_geo.loc;
+        }
+
+        // Managed-app unparented OR, or fallback when no cursor anchor
+        // is pinned yet. Prefer the X11 window raised on hover (most
+        // likely the creator), then last-focused, then topmost.
         let pick_anchor = |target: Option<&X11Surface>| {
             self.space.elements().rev().find_map(|w| {
                 let x11 = w.x11_surface()?;
@@ -1084,9 +1097,7 @@ impl DriftWm {
             return anchor_canvas + (or_geo.loc - anchor_x11);
         }
 
-        // OR-only X11 apps (jgmenu, dmenu-style popups) have no managed
-        // window to anchor against. Use the cached cursor-pinned anchor
-        // so the menu chain keeps consistent relative offsets.
+        // Last resort: cursor-pinned anchor, regardless of class-match.
         if let Some(anchor) = self.or_root_anchor {
             return anchor + or_geo.loc;
         }

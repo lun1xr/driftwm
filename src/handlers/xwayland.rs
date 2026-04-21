@@ -132,16 +132,19 @@ impl XwmHandler for DriftWm {
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, window: X11Surface) {
         tracing::debug!("X11 override-redirect mapped: {:?}", window.class());
 
-        // Pin the X11-root → canvas anchor when an OR-only X11 app (no
-        // managed X11 window in space) opens its first popup. Place this
-        // first OR at the cursor; subsequent OR windows in the chain
-        // translate from that anchor so their relative offsets are kept.
-        if self.or_root_anchor.is_none()
-            && !self
-                .space
-                .elements()
-                .any(|w| w.x11_surface().is_some())
-        {
+        // Pin the X11-root → canvas anchor when an OR-only X11 app
+        // (jgmenu / dmenu style) opens its first popup: an OR whose
+        // WM_CLASS doesn't match any managed X11 window — so no managed
+        // app is its likely creator. Place the OR at the cursor;
+        // subsequent ORs in the chain translate from that anchor so
+        // their relative offsets are kept. Managed-app unparented ORs
+        // (e.g. Steam hover menus) keep going through `pick_anchor`.
+        let class = window.class();
+        let has_class_match = !class.is_empty()
+            && self.space.elements().any(|w| {
+                w.x11_surface().is_some_and(|x| x.class() == class)
+            });
+        if self.or_root_anchor.is_none() && !has_class_match {
             let cursor = self.seat.get_pointer().unwrap().current_location();
             let cursor_i32 = smithay::utils::Point::from((cursor.x as i32, cursor.y as i32));
             self.or_root_anchor = Some(cursor_i32 - window.geometry().loc);
