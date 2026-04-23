@@ -171,8 +171,13 @@ impl Config {
     /// Load config from `$XDG_CONFIG_HOME/driftwm/config.toml` (or `~/.config/driftwm/config.toml`).
     /// Missing file → all defaults. Parse failure → error log + all defaults.
     pub fn load() -> Self {
-        let config_path = config_path();
-        let raw = match std::fs::read_to_string(&config_path) {
+        Self::load_from(&config_path())
+    }
+
+    /// Load config from an explicit path. Used by `--config <path>` CLI arg.
+    /// Missing file → all defaults. Parse failure → error log + all defaults.
+    pub fn load_from(config_path: &std::path::Path) -> Self {
+        let raw = match std::fs::read_to_string(config_path) {
             Ok(contents) => {
                 tracing::info!("Loaded config from {}", config_path.display());
                 match ::toml::from_str::<ConfigFile>(&contents) {

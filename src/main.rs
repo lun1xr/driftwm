@@ -31,6 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // --config <path>: override config file location (useful for nested/test sessions).
+    // Sets DRIFTWM_CONFIG env var which Config::load() reads.
+    if let Some(path) = std::env::args().skip_while(|a| a != "--config").nth(1) {
+        unsafe { std::env::set_var("DRIFTWM_CONFIG", &path) };
+    }
+
     // Parse --backend arg (default: udev on bare metal, winit if nested)
     let backend_name = std::env::args()
         .skip_while(|a| a != "--backend")

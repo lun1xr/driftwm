@@ -233,6 +233,10 @@ impl Default for XWaylandConfig {
 }
 
 pub fn config_path() -> std::path::PathBuf {
+    // --config <path> sets DRIFTWM_CONFIG at startup
+    if let Ok(p) = std::env::var("DRIFTWM_CONFIG") {
+        return std::path::PathBuf::from(expand_tilde(&p));
+    }
     let config_dir = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
         format!("{home}/.config")
