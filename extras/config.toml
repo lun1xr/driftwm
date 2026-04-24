@@ -35,8 +35,9 @@ shader_path = "/usr/local/share/driftwm/wallpapers/pink_cloud.glsl"
 [output.outline]
 color="#FDF6E3"
 
-[mouse.on-canvas]
-right = "spawn jgmenu_run"
+[mouse]
+decoration_resize_snapped = true
+decoration_fit_snapped = true
 
 [keybindings]
 "mod+return" = "exec ptyxis -s"
@@ -50,9 +51,12 @@ right = "spawn jgmenu_run"
 "XF86MonBrightnessUp" = "spawn swayosd-client --brightness raise"
 "XF86MonBrightnessDown" = "spawn swayosd-client --brightness lower"
 "mod+s" = "exec ~/Documents/work/scripts/driftwm/extras/scripts/window-search.sh"
+"mod+m" = "fit-window-snapped"
+"mod+shift+m" = "fit-window"
 
 [gestures.on-window]
-"alt+2-finger-pinch-in" = "close-window"
+"alt+3-finger-swipe" = "resize-window-snapped"
+"alt+shift+3-finger-swipe" = "resize-window"
 
 [[outputs]]
 name = "HDMI-A-1"
