@@ -591,10 +591,6 @@ impl DriftWm {
         self.redraws_needed.extend(self.active_crtcs.iter());
     }
 
-    pub fn remove_capture_state(&mut self, output_name: &str) {
-        self.render.remove_capture_state(output_name);
-    }
-
     pub fn cursor_is_animated(&self) -> bool {
         self.cursor.is_animated()
     }

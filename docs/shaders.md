@@ -84,16 +84,40 @@ void main() {
 - **Shipped examples**: See `extras/wallpapers/` for dot grid, compass grid,
   noise clouds, dark sea, blue drift, and animated squares.
 
-## Using a custom shader
+## Configuring the background
 
-Set `shader_path` under `[background]` in your config:
+`[background]` accepts a `type` and a `path`. Three types are supported:
 
 ```toml
+# Procedural GLSL shader — scrolls with the canvas
 [background]
-shader_path = "~/shaders/my_bg.glsl"
+type = "shader"
+path = "~/shaders/my_bg.glsl"
+
+# Image tiled across the canvas (scrolls with the camera)
+[background]
+type = "tile"
+path = "~/Pictures/tile.png"
+
+# Single image fixed to the viewport (does not scroll or zoom).
+# Cheapest mode: zero per-frame uniform updates, so blur and overlays
+# above stay cached across pans.
+[background]
+type = "wallpaper"
+path = "~/Pictures/wallpaper.png"
 ```
 
-Priority: `shader_path` > `tile_path` > built-in dot grid.
+The `wallpaper` mode stretches the image to fill the output. Pick an image
+sized to your monitor for best results.
+
+### Legacy fields
+
+`shader_path` and `tile_path` are still accepted for backwards compatibility
+and behave like `type = "shader"` and `type = "tile"` respectively. They log
+an info-level deprecation hint at startup; prefer `type` + `path` in new
+configs.
+
+If both `type` and a legacy field are set, `type` wins.
 
 ## Reloading after edits
 

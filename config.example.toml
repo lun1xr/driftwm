@@ -129,10 +129,20 @@
 # opacity = 0.5               # 0.0–1.0
 
 [background]
-# shader_path = "/usr/local/share/driftwm/wallpapers/dot_grid.glsl"
+# Three background types: "shader", "tile", "wallpaper". `path` is the source.
+# type = "shader"
+# path = "/usr/local/share/driftwm/wallpapers/dot_grid.glsl"
 # Examples:
-# # shader_path = "/usr/local/share/driftwm/wallpapers/animated/fast_smoke.glsl"   # animated shader
-# # tile_path = "~/Pictures/Wallpapers/wallpaper.jpg"     # tiled image (mutually exclusive with shader)
+# # type = "shader" — procedural GLSL (scrolls with canvas)
+# # path = "/usr/local/share/driftwm/wallpapers/animated/fast_smoke.glsl"
+# # type = "tile" — image tiled across the canvas
+# # path = "~/Pictures/Wallpapers/tile.png"
+# # type = "wallpaper" — single image fixed to viewport (does not scroll/zoom)
+# # path = "~/Pictures/Wallpapers/wallpaper.jpg"
+#
+# Legacy (still works, prefer the form above):
+# # shader_path = "..."
+# # tile_path   = "..."
 
 # Keyboard bindings: "Modifier+...+Keysym" = "action [arg]"
 # Merges with defaults. Use "none" to unbind a default binding.

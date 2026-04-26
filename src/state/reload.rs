@@ -74,12 +74,19 @@ impl DriftWm {
             }
         }
 
-        // Background shader/tile — always clear cached state so that editing
-        // the shader file on disk takes effect after `touch`ing the config.
+        // Background source — always clear cached state so that editing
+        // the shader file on disk takes effect after `touch`ing the config,
+        // and switching `type` between shader/tile/wallpaper swaps modes cleanly.
+        // Reset `background_is_animated`: stale `true` (left over from a
+        // previous animated shader) defeats wallpaper/tile damage savings by
+        // forcing per-frame redraws.
         self.render.background_shader = None;
+        self.render.background_is_animated = false;
         self.render.cached_bg_elements.clear();
         self.render.tile_shader = None;
         self.render.cached_tile_bg.clear();
+        self.render.wallpaper_shader = None;
+        self.render.cached_wallpaper_bg.clear();
 
         // Cursor theme/size — validate theme before committing
         let theme_changed = new_config.cursor_theme != self.config.cursor_theme;

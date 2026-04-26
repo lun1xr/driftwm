@@ -350,8 +350,7 @@ impl Config {
         }
 
         let background = BackgroundConfig {
-            shader_path: raw.background.shader_path.map(|p| expand_tilde(&p)),
-            tile_path: raw.background.tile_path.map(|p| expand_tilde(&p)),
+            kind: resolve_background_kind(raw.background),
         };
 
         let trackpad = {
@@ -574,6 +573,47 @@ impl Config {
         }
         result
     }
+}
+
+fn resolve_background_kind(raw: toml::BackgroundFileConfig) -> BackgroundKind {
+    let toml::BackgroundFileConfig {
+        kind,
+        path,
+        shader_path,
+        tile_path,
+    } = raw;
+    if kind.is_some() && (shader_path.is_some() || tile_path.is_some()) {
+        tracing::warn!(
+            "[background] both `type` and a legacy `shader_path`/`tile_path` are set; \
+             the new `type`/`path` takes precedence"
+        );
+    }
+    if let Some(t) = kind.as_deref() {
+        return match (t, path) {
+            ("shader", Some(p)) => BackgroundKind::Shader(expand_tilde(&p)),
+            ("tile", Some(p)) => BackgroundKind::Tile(expand_tilde(&p)),
+            ("wallpaper", Some(p)) => BackgroundKind::Wallpaper(expand_tilde(&p)),
+            (_, None) => {
+                tracing::warn!("[background] type=\"{t}\" requires `path`, using default");
+                BackgroundKind::Default
+            }
+            (other, _) => {
+                tracing::warn!("[background] unknown type \"{other}\", using default");
+                BackgroundKind::Default
+            }
+        };
+    }
+    if let Some(p) = shader_path {
+        tracing::info!(
+            "[background] `shader_path` is deprecated, prefer `type = \"shader\"` + `path`"
+        );
+        return BackgroundKind::Shader(expand_tilde(&p));
+    }
+    if let Some(p) = tile_path {
+        tracing::info!("[background] `tile_path` is deprecated, prefer `type = \"tile\"` + `path`");
+        return BackgroundKind::Tile(expand_tilde(&p));
+    }
+    BackgroundKind::Default
 }
 
 impl Default for Config {

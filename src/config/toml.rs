@@ -156,6 +156,9 @@ pub(super) struct OutputOutlineConfig {
 #[derive(Deserialize, Default)]
 #[serde(default, deny_unknown_fields)]
 pub(super) struct BackgroundFileConfig {
+    #[serde(rename = "type")]
+    pub kind: Option<String>,
+    pub path: Option<String>,
     pub shader_path: Option<String>,
     pub tile_path: Option<String>,
 }

@@ -1,8 +1,8 @@
 use driftwm::config::{
-    Action, BTN_LEFT, BTN_RIGHT, BindingContext, Config, ContinuousAction, Direction,
-    GestureConfigEntry, ModKey, MouseAction, MouseTrigger, ThresholdAction, parse_action,
-    parse_direction, parse_gesture_binding, parse_gesture_config_entry, parse_gesture_trigger,
-    parse_key_combo, parse_mouse_action, parse_mouse_binding,
+    Action, BTN_LEFT, BTN_RIGHT, BackgroundKind, BindingContext, Config, ContinuousAction,
+    Direction, GestureConfigEntry, ModKey, MouseAction, MouseTrigger, ThresholdAction,
+    parse_action, parse_direction, parse_gesture_binding, parse_gesture_config_entry,
+    parse_gesture_trigger, parse_key_combo, parse_mouse_action, parse_mouse_binding,
 };
 use smithay::backend::input::AxisSource;
 use smithay::input::keyboard::{Keysym, ModifiersState, keysyms};
@@ -658,14 +658,11 @@ fn gesture_alt_shift_3_finger_swipe_defaults_to_resize_snapped() {
 // ── Background paths ─────────────────────────────────────────────────────
 
 #[test]
-fn default_config_background_paths_are_none() {
+fn default_config_background_kind_is_default() {
     let config = Config::default();
-    assert!(
-        config.background.shader_path.is_none(),
-        "default config should have no shader_path"
-    );
-    assert!(
-        config.background.tile_path.is_none(),
-        "default config should have no tile_path"
+    assert_eq!(
+        config.background.kind,
+        BackgroundKind::Default,
+        "default config should resolve to BackgroundKind::Default"
     );
 }

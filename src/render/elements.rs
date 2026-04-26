@@ -287,6 +287,7 @@ render_elements! {
     pub OutputRenderElements<=GlesRenderer>;
     Background=RescaleRenderElement<PixelShaderElement>,
     TileBg=RescaleRenderElement<TileShaderElement>,
+    WallpaperBg=TileShaderElement,
     Decoration=PixelSnapRescaleElement<MemoryRenderBufferRenderElement<GlesRenderer>>,
     Window=PixelSnapRescaleElement<WaylandSurfaceRenderElement<GlesRenderer>>,
     CsdWindow=PixelSnapRescaleElement<RoundedCornerElement>,

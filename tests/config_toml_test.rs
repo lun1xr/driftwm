@@ -1,6 +1,6 @@
 use driftwm::config::{
-    Action, BTN_RIGHT, BindingContext, Config, ContinuousAction, GestureConfigEntry,
-    GestureTrigger, MouseAction,
+    Action, BTN_RIGHT, BackgroundKind, BindingContext, Config, ContinuousAction,
+    GestureConfigEntry, GestureTrigger, MouseAction,
 };
 use smithay::backend::input::AxisSource;
 use smithay::input::keyboard::{Keysym, ModifiersState, keysyms};
@@ -316,9 +316,99 @@ fn toml_background_tilde_expansion() {
         shader_path = "~/shaders/bg.frag"
     "#;
     let config = Config::from_toml(toml).unwrap();
-    if let Some(ref path) = config.background.shader_path {
-        assert!(!path.starts_with("~"), "tilde should be expanded");
+    match config.background.kind {
+        BackgroundKind::Shader(path) => {
+            assert!(!path.starts_with("~"), "tilde should be expanded");
+        }
+        other => panic!("expected BackgroundKind::Shader from legacy shader_path, got {other:?}"),
     }
+}
+
+#[test]
+fn toml_background_new_form_wallpaper() {
+    let toml = r#"
+        [background]
+        type = "wallpaper"
+        path = "~/Pictures/wp.png"
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    match config.background.kind {
+        BackgroundKind::Wallpaper(path) => {
+            assert!(!path.starts_with("~"), "tilde should be expanded");
+            assert!(path.ends_with("/Pictures/wp.png"));
+        }
+        other => panic!("expected BackgroundKind::Wallpaper, got {other:?}"),
+    }
+}
+
+#[test]
+fn toml_background_unknown_type_falls_back_to_default() {
+    let toml = r#"
+        [background]
+        type = "video"
+        path = "~/v.mp4"
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    assert_eq!(config.background.kind, BackgroundKind::Default);
+}
+
+#[test]
+fn toml_background_type_overrides_legacy() {
+    let toml = r#"
+        [background]
+        type = "wallpaper"
+        path = "/tmp/wp.png"
+        shader_path = "/tmp/sh.glsl"
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    assert!(matches!(
+        config.background.kind,
+        BackgroundKind::Wallpaper(_)
+    ));
+}
+
+#[test]
+fn toml_background_new_form_shader() {
+    let toml = r#"
+        [background]
+        type = "shader"
+        path = "~/shaders/my.glsl"
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    match config.background.kind {
+        BackgroundKind::Shader(path) => {
+            assert!(!path.starts_with("~"), "tilde should be expanded");
+            assert!(path.ends_with("/shaders/my.glsl"));
+        }
+        other => panic!("expected BackgroundKind::Shader, got {other:?}"),
+    }
+}
+
+#[test]
+fn toml_background_new_form_tile() {
+    let toml = r#"
+        [background]
+        type = "tile"
+        path = "~/Pictures/tile.png"
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    match config.background.kind {
+        BackgroundKind::Tile(path) => {
+            assert!(!path.starts_with("~"), "tilde should be expanded");
+            assert!(path.ends_with("/Pictures/tile.png"));
+        }
+        other => panic!("expected BackgroundKind::Tile, got {other:?}"),
+    }
+}
+
+#[test]
+fn toml_background_type_without_path_falls_back_to_default() {
+    let toml = r#"
+        [background]
+        type = "wallpaper"
+    "#;
+    let config = Config::from_toml(toml).unwrap();
+    assert_eq!(config.background.kind, BackgroundKind::Default);
 }
 
 #[test]

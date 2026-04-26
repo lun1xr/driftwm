@@ -31,6 +31,8 @@ pub struct RenderCache {
     pub capture_state: HashMap<String, CaptureOutputState>,
     pub tile_shader: Option<GlesTexProgram>,
     pub cached_tile_bg: HashMap<String, crate::render::TileShaderElement>,
+    pub wallpaper_shader: Option<GlesTexProgram>,
+    pub cached_wallpaper_bg: HashMap<String, crate::render::TileShaderElement>,
 }
 
 impl RenderCache {
@@ -52,11 +54,23 @@ impl RenderCache {
             capture_state: HashMap::new(),
             tile_shader: None,
             cached_tile_bg: HashMap::new(),
+            wallpaper_shader: None,
+            cached_wallpaper_bg: HashMap::new(),
         }
     }
 
     pub fn remove_capture_state(&mut self, output_name: &str) {
         self.capture_state
             .retain(|k, _| !k.ends_with(&format!(":{output_name}")));
+    }
+
+    /// Drop all per-output GPU state for `output_name`. Called on output
+    /// disconnect/remap so a later reconnect re-runs `init_background` instead
+    /// of reusing a stale element with the previous geometry.
+    pub fn remove_output(&mut self, output_name: &str) {
+        self.cached_bg_elements.remove(output_name);
+        self.cached_tile_bg.remove(output_name);
+        self.cached_wallpaper_bg.remove(output_name);
+        self.remove_capture_state(output_name);
     }
 }

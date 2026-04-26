@@ -520,8 +520,7 @@ pub fn init_udev(
                                         .collect();
                                     for old in &virtual_outputs {
                                         data.space.unmap_output(old);
-                                        data.render.cached_bg_elements.remove(&old.name());
-                                        data.remove_capture_state(&old.name());
+                                        data.render.remove_output(&old.name());
                                     }
                                     data.disconnected_outputs.clear();
                                     data.focused_output = None;
@@ -579,8 +578,7 @@ pub fn init_udev(
                                         );
                                         data.disconnected_outputs.insert(surface.output.name());
                                         data.exit_fullscreen_on(&surface.output);
-                                        data.render.cached_bg_elements.remove(&surface.output.name());
-                                        data.remove_capture_state(&surface.output.name());
+                                        data.render.remove_output(&surface.output.name());
                                         data.lock_surfaces.remove(&surface.output);
                                     } else {
                                         data.space.unmap_output(&surface.output);
@@ -616,8 +614,7 @@ pub fn init_udev(
                                         }
 
                                         // Clean up per-output resources
-                                        data.render.cached_bg_elements.remove(&surface.output.name());
-                                        data.remove_capture_state(&surface.output.name());
+                                        data.render.remove_output(&surface.output.name());
                                         data.fullscreen.remove(&surface.output);
                                         data.lock_surfaces.remove(&surface.output);
                                     }

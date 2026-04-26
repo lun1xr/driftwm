@@ -724,13 +724,26 @@ pub enum OutputMode {
     SizeRefresh(i32, i32, u32),
 }
 
-/// Built-in dot grid shader — used when no shader_path or tile_path is configured.
+/// Built-in dot grid shader — used when no background source is configured.
 pub const DEFAULT_SHADER: &str = include_str!("../shaders/dot_grid.glsl");
+
+/// Background source. The three image-bearing variants are intentionally
+/// orthogonal to "animated vs not" — animation is detected from the shader
+/// source (`u_time`) or, in future, from file extensions for tile/wallpaper.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub enum BackgroundKind {
+    /// Procedural GLSL fullscreen shader.
+    Shader(String),
+    /// Texture tiled across canvas via `tile_bg.glsl` (scrolls with camera).
+    Tile(String),
+    /// Single image filling the viewport (fixed; does not scroll/zoom).
+    Wallpaper(String),
+    /// Built-in dot grid shader.
+    #[default]
+    Default,
+}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BackgroundConfig {
-    /// Path to a GLSL fragment shader. If set, shader is compiled and rendered fullscreen.
-    pub shader_path: Option<String>,
-    /// Path to a tile image (PNG/JPG). If set, image is tiled across the canvas.
-    pub tile_path: Option<String>,
+    pub kind: BackgroundKind,
 }
