@@ -128,10 +128,13 @@ pub(crate) fn log_err(context: &str, result: Result<impl Sized, impl std::fmt::D
     }
 }
 
-/// Spawn a shell command with SIGCHLD reset to default.
+/// Spawn a shell command with SIGCHLD reset to default and sigmask cleared.
 /// The compositor sets SIG_IGN on SIGCHLD for zombie reaping, but children
 /// inherit this — breaking GLib's waitpid()-based subprocess management
 /// (swaync-client hangs because GSpawnSync gets ECHILD).
+/// We also block SIGINT/SIGTERM/SIGHUP via pthread_sigmask for our own
+/// shutdown handling, and that mask is inherited too — clear it so apps
+/// with their own signal handlers still see those signals normally.
 pub fn spawn_command(cmd: &str) {
     use std::os::unix::process::CommandExt;
     let mut child = std::process::Command::new("sh");
@@ -139,6 +142,7 @@ pub fn spawn_command(cmd: &str) {
     unsafe {
         child.pre_exec(|| {
             libc::signal(libc::SIGCHLD, libc::SIG_DFL);
+            crate::signals::unblock_all()?;
             Ok(())
         });
     }

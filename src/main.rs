@@ -6,12 +6,19 @@ mod grabs;
 mod handlers;
 mod input;
 mod render;
+mod signals;
 mod state;
 
 use state::{ClientState, DriftWm};
 use std::sync::Arc;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Block SIGINT/SIGTERM/SIGHUP before any threads spawn so they're
+    // delivered via signalfd (see signals::listen) instead of killing the
+    // process. Child threads inherit the mask; spawn_command clears it for
+    // exec'd children.
+    signals::block_early()?;
+
     // Initialize logging (RUST_LOG=info by default)
     if std::env::var("RUST_LOG").is_err() {
         unsafe { std::env::set_var("RUST_LOG", "info") };
@@ -53,6 +60,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create calloop event loop
     let mut event_loop: smithay::reexports::calloop::EventLoop<DriftWm> =
         smithay::reexports::calloop::EventLoop::try_new()?;
+
+    // Receive blocked signals via signalfd; the handler calls
+    // loop_signal.stop() — same path as the Quit keybind, so `pkill driftwm`
+    // (or systemd's SIGTERM on shutdown) goes through the clean exit path.
+    signals::listen(&event_loop.handle());
 
     // Create Wayland display
     let display =
